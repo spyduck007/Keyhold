@@ -25,7 +25,9 @@ from usb_vault.core.serialization import (
 from usb_vault.core.storage.format import VAULT_ID_LENGTH
 from usb_vault.core.vault.blob import (
     BLOB_ID_LENGTH,
-    MAX_BLOB_PLAINTEXT_LENGTH,
+)
+from usb_vault.core.vault.chunk_stream import (
+    MAX_PLAINTEXT_LENGTH,
 )
 
 MANIFEST_MAGIC = "USBVAULTMANIFEST"
@@ -85,7 +87,7 @@ class VaultEntry:
         if self.size < 0:
             raise ValueError("size must not be negative")
 
-        if self.size > MAX_BLOB_PLAINTEXT_LENGTH:
+        if self.size > MAX_PLAINTEXT_LENGTH:
             raise ValueError("size exceeds the supported file limit")
 
     def to_object(self) -> dict[str, object]:

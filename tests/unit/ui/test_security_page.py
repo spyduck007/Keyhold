@@ -29,6 +29,19 @@ def _show_page(
     QApplication.processEvents()
 
 
+def _table_text(
+    page: SecurityPage,
+    row: int,
+    column: int,
+) -> str:
+    item = page.keys_table.item(
+        row,
+        column,
+    )
+    assert item is not None
+    return item.text()
+
+
 def test_snapshot_displays_current_and_backup_keys(
     qtbot: QtBot,
 ) -> None:
@@ -52,8 +65,22 @@ def test_snapshot_displays_current_and_backup_keys(
     )
 
     assert page.keys_table.rowCount() == 2
-    assert page.keys_table.item(0, 1).text() == "Current"
-    assert page.keys_table.item(1, 1).text() == "Backup"
+    assert (
+        _table_text(
+            page,
+            0,
+            1,
+        )
+        == "Current"
+    )
+    assert (
+        _table_text(
+            page,
+            1,
+            1,
+        )
+        == "Backup"
+    )
     assert page.recovery_code_edit.isVisible()
 
 

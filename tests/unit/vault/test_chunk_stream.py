@@ -305,12 +305,16 @@ class TrackingReader(io.BytesIO):
 
     def read(
         self,
-        size: int = -1,
+        size: int | None = -1,
+        /,
     ) -> bytes:
+        recorded_size = -1 if size is None else size
         self.largest_request = max(
             self.largest_request,
-            size,
+            recorded_size,
         )
+
+        return super().read(size)
 
         return super().read(size)
 

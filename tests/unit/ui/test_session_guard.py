@@ -46,12 +46,15 @@ def test_guard_starts_with_expected_identity() -> None:
     guard.start(KEYFILE_PATH)
 
     assert guard.is_active
-    assert guard.keyfile_path == KEYFILE_PATH
+
+    active_keyfile_path = guard.keyfile_path
+    assert active_keyfile_path == KEYFILE_PATH
 
     guard.stop()
 
     assert not guard.is_active
-    assert guard.keyfile_path is None
+    stopped_keyfile_path = guard.keyfile_path
+    assert stopped_keyfile_path is None
 
 
 def test_missing_keyfile_emits_lock_signal(

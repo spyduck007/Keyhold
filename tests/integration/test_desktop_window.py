@@ -15,6 +15,7 @@ from pytestqt.qtbot import QtBot
 
 from usb_vault.core.errors import (
     UnlockError,
+    VaultOperationError,
 )
 from usb_vault.core.vault.operations import (
     VaultEntrySummary,
@@ -168,6 +169,42 @@ class FakeSetupBackend:
             entries=(),
             recovery_code=("UVR1-TEST-RECOVERY-CODE"),
         )
+
+
+class FailingAddBackend(FakeBackend):
+    """Backend that exposes an add-file error."""
+
+    def add_file(
+        self,
+        vault: UnlockedVault,
+        source_path: Path,
+        stored_name: str | None = None,
+    ) -> VaultEntrySummary:
+        del source_path
+        del stored_name
+
+        vault.password_bytes()
+        raise VaultOperationError("Large-file test failure.")
+
+
+def test_single_add_failure_preserves_detailed_error(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    window = MainWindow(backend=FailingAddBackend())
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    _fill_unlock_page(window)
+    _click_unlock(window)
+
+    result = window.add_files_from_paths((tmp_path / "large.bin",))
+
+    assert result == (
+        0,
+        1,
+    )
+    assert window.statusBar().currentMessage() == "Large-file test failure."
 
 
 def _show_window(

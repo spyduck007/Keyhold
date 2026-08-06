@@ -26,6 +26,9 @@ from usb_vault.core.storage.reader import (
     read_usb_keyfile,
     read_vault_container,
 )
+from usb_vault.core.storage.streaming_container import (
+    StoredBlob,
+)
 from usb_vault.core.vault.manifest import (
     VaultManifest,
     manifest_associated_data,
@@ -39,7 +42,7 @@ def unlock_vault(
     *,
     vault_path: str | Path,
     keyfile_path: str | Path,
-    password: str | bytes | bytearray | memoryview,
+    password: (str | bytes | bytearray | memoryview),
 ) -> VaultSession:
     """Unlock a vault with a password and USB keyfile."""
     keyfile = read_usb_keyfile(keyfile_path)
@@ -91,11 +94,26 @@ def open_vault_session(
     )
     manifest = VaultManifest.from_bytes(manifest_bytes)
 
-    expected_blob_ids = {entry.blob_id for entry in manifest.entries}
+    expected_blob_ids = {entry.blob_id for entry in (manifest.entries)}
     actual_blob_ids = {blob.blob_id for blob in container.blobs}
 
     if expected_blob_ids != actual_blob_ids:
         raise UnlockError
+
+    for entry in manifest.entries:
+        blob = container.find_blob(entry.blob_id)
+
+        if blob is None:
+            raise UnlockError
+
+        if (
+            isinstance(
+                blob,
+                StoredBlob,
+            )
+            and blob.plaintext_length != entry.size
+        ):
+            raise UnlockError
 
     return VaultSession.create(
         vault_path=vault_path,

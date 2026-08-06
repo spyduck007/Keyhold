@@ -96,6 +96,7 @@ def create_vault(
     container = VaultContainer(
         header=header,
         encrypted_manifest=encrypted_manifest,
+        storage_version=3,
     )
 
     keyfile_written = False

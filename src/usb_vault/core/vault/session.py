@@ -6,13 +6,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
 
-from usb_vault.core.crypto.random import MASTER_KEY_LENGTH
-from usb_vault.core.storage.format import VaultHeader
+from usb_vault.core.crypto.random import (
+    MASTER_KEY_LENGTH,
+)
+from usb_vault.core.storage.format import (
+    VaultHeader,
+)
+from usb_vault.core.storage.streaming_container import (
+    StoredBlob,
+)
 from usb_vault.core.vault.blob import (
     BLOB_ID_LENGTH,
     EncryptedBlob,
 )
-from usb_vault.core.vault.manifest import VaultManifest
+from usb_vault.core.vault.manifest import (
+    VaultManifest,
+)
+
+SessionBlob = EncryptedBlob | StoredBlob
 
 
 @dataclass(slots=True)
@@ -22,7 +33,10 @@ class VaultSession:
     vault_path: Path
     header: VaultHeader
     manifest: VaultManifest
-    blobs: tuple[EncryptedBlob, ...]
+    blobs: tuple[
+        SessionBlob,
+        ...,
+    ]
     _master_key: bytearray = field(repr=False)
     _closed: bool = field(
         default=False,
@@ -38,7 +52,10 @@ class VaultSession:
         header: VaultHeader,
         manifest: VaultManifest,
         master_key: bytes,
-        blobs: tuple[EncryptedBlob, ...] = (),
+        blobs: tuple[
+            SessionBlob,
+            ...,
+        ] = (),
     ) -> VaultSession:
         """Create a session from validated decrypted state."""
         if not isinstance(
@@ -50,11 +67,23 @@ class VaultSession:
         if len(master_key) != MASTER_KEY_LENGTH:
             raise ValueError(f"master_key must be exactly {MASTER_KEY_LENGTH} bytes")
 
-        if not isinstance(blobs, tuple):
+        if not isinstance(
+            blobs,
+            tuple,
+        ):
             raise TypeError("blobs must be a tuple")
 
-        if not all(isinstance(blob, EncryptedBlob) for blob in blobs):
-            raise TypeError("every blob must be EncryptedBlob")
+        if not all(
+            isinstance(
+                blob,
+                (
+                    EncryptedBlob,
+                    StoredBlob,
+                ),
+            )
+            for blob in blobs
+        ):
+            raise TypeError("every blob must be EncryptedBlob or StoredBlob")
 
         return cls(
             vault_path=Path(vault_path),
@@ -83,11 +112,14 @@ class VaultSession:
     def find_blob(
         self,
         blob_id: bytes,
-    ) -> EncryptedBlob | None:
-        """Find an encrypted blob in the unlocked container state."""
+    ) -> SessionBlob | None:
+        """Find an encrypted blob in the unlocked state."""
         self._require_open()
 
-        if not isinstance(blob_id, bytes):
+        if not isinstance(
+            blob_id,
+            bytes,
+        ):
             raise TypeError("blob_id must be bytes")
 
         if len(blob_id) != BLOB_ID_LENGTH:
@@ -109,15 +141,17 @@ class VaultSession:
 
         self._closed = True
 
-    def __enter__(self) -> VaultSession:
+    def __enter__(
+        self,
+    ) -> VaultSession:
         self._require_open()
         return self
 
     def __exit__(
         self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
+        exception_type: (type[BaseException] | None),
+        exception: (BaseException | None),
+        traceback: (TracebackType | None),
     ) -> None:
         self.close()
 

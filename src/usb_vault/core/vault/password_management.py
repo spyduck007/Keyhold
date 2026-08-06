@@ -227,6 +227,7 @@ def change_vault_password(
             header=updated_header,
             encrypted_manifest=(original_container.encrypted_manifest),
             blobs=original_container.blobs,
+            storage_version=(original_container.storage_version),
         )
 
         vault_updated = False

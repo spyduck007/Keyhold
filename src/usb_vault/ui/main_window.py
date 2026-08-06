@@ -202,12 +202,12 @@ class MainWindow(QMainWindow):
             else:
                 failed_count += 1
 
-        if failed_count:
+        if failed_count and (added_count > 0 or failed_count > 1):
             self.statusBar().showMessage(
                 (f"Added {added_count} file(s); {failed_count} failed."),
                 8_000,
             )
-        else:
+        elif not failed_count:
             self.statusBar().showMessage(
                 (f"Added {added_count} file(s)."),
                 5_000,

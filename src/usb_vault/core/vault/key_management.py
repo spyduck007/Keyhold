@@ -147,6 +147,7 @@ def add_usb_key(
             header=updated_header,
             encrypted_manifest=(original_container.encrypted_manifest),
             blobs=original_container.blobs,
+            storage_version=(original_container.storage_version),
         )
 
         keyfile_written = False
@@ -246,6 +247,7 @@ def revoke_usb_key(
             header=updated_header,
             encrypted_manifest=(original_container.encrypted_manifest),
             blobs=original_container.blobs,
+            storage_version=(original_container.storage_version),
         )
 
         vault_updated = False

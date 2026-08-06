@@ -166,6 +166,7 @@ def create_recovery_code(
             header=updated_header,
             encrypted_manifest=(original_container.encrypted_manifest),
             blobs=original_container.blobs,
+            storage_version=(original_container.storage_version),
         )
         recovery_code = credential.to_code()
         vault_updated = False
@@ -338,6 +339,7 @@ def recover_usb_key(
             header=updated_header,
             encrypted_manifest=(original_container.encrypted_manifest),
             blobs=original_container.blobs,
+            storage_version=(original_container.storage_version),
         )
         new_recovery_code = new_credential.to_code()
 

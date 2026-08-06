@@ -25,7 +25,7 @@ from usb_vault.core.errors import (
 from usb_vault.core.storage.atomic_save import (
     atomic_write_file,
 )
-from usb_vault.core.storage.container import (
+from usb_vault.core.storage.limits import (
     MAX_BLOB_COUNT,
     MAX_ENCRYPTED_MANIFEST_LENGTH,
     MAX_HEADER_LENGTH,

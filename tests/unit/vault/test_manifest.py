@@ -21,6 +21,9 @@ from usb_vault.core.vault.manifest import (
     manifest_associated_data,
     normalize_entry_name,
 )
+from usb_vault.core.vault.blob import (
+    MAX_BLOB_PLAINTEXT_LENGTH,
+)
 
 
 def _entry(
@@ -36,6 +39,17 @@ def _entry(
         name=name,
         size=size,
     )
+
+
+def test_entry_size_can_exceed_legacy_blob_limit() -> None:
+    entry = create_vault_entry(
+        name="large.bin",
+        size=(MAX_BLOB_PLAINTEXT_LENGTH + 1),
+        blob_id=(b"B" * BLOB_ID_LENGTH),
+        entry_id=(b"E" * ENTRY_ID_LENGTH),
+    )
+
+    assert entry.size == (MAX_BLOB_PLAINTEXT_LENGTH + 1)
 
 
 def test_manifest_with_entries_round_trip() -> None:
