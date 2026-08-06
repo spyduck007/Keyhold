@@ -1,5 +1,8 @@
 """Public file-operation API backed by streaming storage."""
 
+from usb_vault.core.vault.rename import (
+    rename_file,
+)
 from usb_vault.core.vault.streaming_operations import (
     VaultEntrySummary,
     add_file,
@@ -14,4 +17,5 @@ __all__ = [
     "delete_file",
     "extract_file",
     "list_files",
+    "rename_file",
 ]

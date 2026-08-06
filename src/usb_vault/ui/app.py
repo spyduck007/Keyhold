@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from usb_vault.ui.fully_async_window import (
-    FullyAsyncSecurityMainWindow,
+from usb_vault.ui.rename_window import (
+    RenameMainWindow,
 )
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
@@ -51,7 +51,7 @@ def main(
         ),
     )
 
-    window = FullyAsyncSecurityMainWindow(session_guard=session_guard)
+    window = RenameMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()

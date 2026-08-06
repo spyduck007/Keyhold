@@ -40,6 +40,9 @@ from usb_vault.cli.commands.recover_usb import (
 from usb_vault.cli.commands.recovery_unlock import (
     run_recovery_unlock_command,
 )
+from usb_vault.cli.commands.rename import (
+    run_rename_command,
+)
 from usb_vault.cli.commands.revoke_key import (
     run_revoke_key_command,
 )
@@ -131,6 +134,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--name",
         required=True,
         help=("Stored filename to delete."),
+    )
+
+    rename_parser = subparsers.add_parser(
+        "rename",
+        help=("Rename one file in the encrypted manifest."),
+    )
+    _add_vault_and_keyfile_arguments(rename_parser)
+    rename_parser.add_argument(
+        "--name",
+        required=True,
+        help=("Current stored filename."),
+    )
+    rename_parser.add_argument(
+        "--new-name",
+        required=True,
+        help=("New root-level filename."),
     )
 
     add_key_parser = subparsers.add_parser(
@@ -294,6 +313,14 @@ def main(
                 vault_path=vault_path,
                 keyfile_path=keyfile_path,
                 stored_name=(arguments.name),
+            )
+
+        if arguments.command == "rename":
+            return run_rename_command(
+                vault_path=vault_path,
+                keyfile_path=keyfile_path,
+                stored_name=(arguments.name),
+                new_name=(arguments.new_name),
             )
 
         if arguments.command == "add-key":
