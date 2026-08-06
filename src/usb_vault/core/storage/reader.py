@@ -11,7 +11,9 @@ from usb_vault.core.keys.keyfile import UsbKeyfile
 from usb_vault.core.storage.container import VaultContainer
 
 MAX_KEYFILE_SIZE = 65_536
-MAX_VAULT_CONTAINER_SIZE = 18_000_000
+
+# The current prototype reads the complete container into memory.
+MAX_VAULT_CONTAINER_SIZE = 268_435_456
 
 
 def read_usb_keyfile(

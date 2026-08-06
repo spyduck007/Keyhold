@@ -23,8 +23,15 @@ def decode_base64(value: object, *, field_name: str) -> bytes:
         raise TypeError(f"{field_name} must be a string")
 
     try:
-        decoded = base64.b64decode(value.encode("ascii"), validate=True)
-    except (UnicodeEncodeError, binascii.Error, ValueError):
+        decoded = base64.b64decode(
+            value.encode("ascii"),
+            validate=True,
+        )
+    except (
+        UnicodeEncodeError,
+        binascii.Error,
+        ValueError,
+    ):
         raise ValueError(f"{field_name} is not valid Base64") from None
 
     if encode_base64(decoded) != value:
@@ -33,7 +40,9 @@ def decode_base64(value: object, *, field_name: str) -> bytes:
     return decoded
 
 
-def canonical_json_bytes(value: Mapping[str, object]) -> bytes:
+def canonical_json_bytes(
+    value: Mapping[str, object],
+) -> bytes:
     """Serialize a JSON object deterministically as UTF-8 bytes."""
     return json.dumps(
         value,
@@ -43,7 +52,9 @@ def canonical_json_bytes(value: Mapping[str, object]) -> bytes:
     ).encode("utf-8")
 
 
-def parse_json_object(data: bytes) -> dict[str, object]:
+def parse_json_object(
+    data: bytes,
+) -> dict[str, object]:
     """Parse a UTF-8 JSON object while rejecting duplicate keys."""
     if not isinstance(data, bytes):
         raise TypeError("data must be bytes")
@@ -56,7 +67,11 @@ def parse_json_object(data: bytes) -> dict[str, object]:
                 object_pairs_hook=_reject_duplicate_keys,
             ),
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ValueError,
+    ):
         raise ValueError("invalid JSON object") from None
 
     if not isinstance(decoded, dict):
@@ -65,7 +80,10 @@ def parse_json_object(data: bytes) -> dict[str, object]:
     if not all(isinstance(key, str) for key in decoded):
         raise ValueError("JSON object keys must be strings")
 
-    return cast(dict[str, object], decoded)
+    return cast(
+        dict[str, object],
+        decoded,
+    )
 
 
 def require_exact_keys(
@@ -74,7 +92,7 @@ def require_exact_keys(
     *,
     object_name: str,
 ) -> None:
-    """Reject missing and unexpected keys in a serialized structure."""
+    """Reject missing and unexpected serialized fields."""
     actual_keys = set(value)
 
     if actual_keys != expected_keys:
@@ -86,14 +104,17 @@ def require_object(
     *,
     field_name: str,
 ) -> dict[str, object]:
-    """Return a JSON object after validating that all keys are strings."""
+    """Return a JSON object after validating its keys."""
     if not isinstance(value, dict):
         raise TypeError(f"{field_name} must be an object")
 
     if not all(isinstance(key, str) for key in value):
         raise TypeError(f"{field_name} keys must be strings")
 
-    return cast(dict[str, object], value)
+    return cast(
+        dict[str, object],
+        value,
+    )
 
 
 def require_list(
@@ -105,7 +126,10 @@ def require_list(
     if not isinstance(value, list):
         raise TypeError(f"{field_name} must be a list")
 
-    return cast(list[object], value)
+    return cast(
+        list[object],
+        value,
+    )
 
 
 def require_string(
@@ -129,7 +153,7 @@ def require_integer(
     if type(value) is not int:
         raise TypeError(f"{field_name} must be an integer")
 
-    return cast(int, value)
+    return value
 
 
 def _reject_duplicate_keys(

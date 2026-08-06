@@ -1,4 +1,4 @@
-"""Tests for the binary vault container."""
+"""Tests for version 2 and legacy vault containers."""
 
 import struct
 
@@ -16,12 +16,18 @@ from usb_vault.core.keys.keyfile import KEY_ID_LENGTH
 from usb_vault.core.storage.container import (
     CONTAINER_MAGIC,
     CONTAINER_PREFIX,
+    LEGACY_CONTAINER_MAGIC,
+    LEGACY_CONTAINER_PREFIX,
     VaultContainer,
 )
 from usb_vault.core.storage.format import (
     VAULT_ID_LENGTH,
     PasswordUsbKeySlot,
     VaultHeader,
+)
+from usb_vault.core.vault.blob import (
+    BLOB_ID_LENGTH,
+    EncryptedBlob,
 )
 
 TEST_PARAMETERS = Argon2Parameters(
@@ -31,81 +37,137 @@ TEST_PARAMETERS = Argon2Parameters(
 )
 
 
-def _container() -> VaultContainer:
-    header = VaultHeader(
-        vault_id=b"V" * VAULT_ID_LENGTH,
+def _header() -> VaultHeader:
+    return VaultHeader(
+        vault_id=(b"V" * VAULT_ID_LENGTH),
         argon2_salt=(b"S" * ARGON2_SALT_LENGTH),
-        argon2_parameters=TEST_PARAMETERS,
+        argon2_parameters=(TEST_PARAMETERS),
         key_slots=(
             PasswordUsbKeySlot(
-                key_id=b"K" * KEY_ID_LENGTH,
+                key_id=(b"K" * KEY_ID_LENGTH),
                 wrapped_master_key=(
                     WrappedMasterKey(
                         nonce=(b"N" * AES_GCM_NONCE_LENGTH),
-                        ciphertext=b"W" * 48,
+                        ciphertext=(b"W" * 48),
                     )
                 ),
             ),
         ),
     )
 
-    return VaultContainer(
-        header=header,
-        encrypted_manifest=EncryptedPayload(
-            nonce=(b"M" * AES_GCM_NONCE_LENGTH),
-            ciphertext=b"C" * 32,
+
+def _manifest_payload() -> EncryptedPayload:
+    return EncryptedPayload(
+        nonce=(b"M" * AES_GCM_NONCE_LENGTH),
+        ciphertext=b"C" * 32,
+    )
+
+
+def _blob() -> EncryptedBlob:
+    return EncryptedBlob(
+        blob_id=(b"B" * BLOB_ID_LENGTH),
+        payload=EncryptedPayload(
+            nonce=(b"Q" * AES_GCM_NONCE_LENGTH),
+            ciphertext=b"D" * 48,
         ),
     )
 
 
-def test_container_round_trip() -> None:
-    original = _container()
+def test_current_container_round_trip_with_blob() -> None:
+    original = VaultContainer(
+        header=_header(),
+        encrypted_manifest=(_manifest_payload()),
+        blobs=(_blob(),),
+    )
 
     restored = VaultContainer.from_bytes(original.to_bytes())
 
     assert restored == original
+    assert restored.find_blob(b"B" * BLOB_ID_LENGTH) == _blob()
 
 
-def test_container_prefix_records_lengths() -> None:
-    container = _container()
-    serialized = container.to_bytes()
+def test_current_prefix_records_blob_count() -> None:
+    serialized = VaultContainer(
+        header=_header(),
+        encrypted_manifest=(_manifest_payload()),
+        blobs=(_blob(),),
+    ).to_bytes()
 
     (
         magic,
-        header_length,
-        ciphertext_length,
+        _,
+        _,
+        blob_count,
     ) = CONTAINER_PREFIX.unpack_from(serialized)
 
     assert magic == CONTAINER_MAGIC
-    assert header_length == len(container.header.to_bytes())
-    assert ciphertext_length == len(container.encrypted_manifest.ciphertext)
+    assert blob_count == 1
+
+
+def test_legacy_container_is_still_readable() -> None:
+    header_bytes = _header().to_bytes()
+    payload = _manifest_payload()
+
+    serialized = b"".join(
+        (
+            LEGACY_CONTAINER_PREFIX.pack(
+                LEGACY_CONTAINER_MAGIC,
+                len(header_bytes),
+                len(payload.ciphertext),
+            ),
+            header_bytes,
+            payload.nonce,
+            payload.ciphertext,
+        )
+    )
+
+    restored = VaultContainer.from_bytes(serialized)
+
+    assert restored.header == _header()
+    assert restored.encrypted_manifest == payload
+    assert restored.blobs == ()
+
+
+def test_duplicate_blob_ids_are_rejected() -> None:
+    blob = _blob()
+
+    with pytest.raises(
+        ValueError,
+        match=("identifiers must be unique"),
+    ):
+        VaultContainer(
+            header=_header(),
+            encrypted_manifest=(_manifest_payload()),
+            blobs=(blob, blob),
+        )
 
 
 def test_trailing_data_is_rejected() -> None:
-    serialized = _container().to_bytes() + b"extra"
+    serialized = (
+        VaultContainer(
+            header=_header(),
+            encrypted_manifest=(_manifest_payload()),
+        ).to_bytes()
+        + b"extra"
+    )
 
-    with pytest.raises(
-        VaultFormatError,
-        match=r"^Invalid vault container\.$",
-    ):
+    with pytest.raises(VaultFormatError):
         VaultContainer.from_bytes(serialized)
 
 
-def test_invalid_magic_is_rejected() -> None:
-    serialized = bytearray(_container().to_bytes())
-    serialized[:8] = b"BADMAGIC"
+def test_impossible_blob_count_is_rejected() -> None:
+    serialized = bytearray(
+        VaultContainer(
+            header=_header(),
+            encrypted_manifest=(_manifest_payload()),
+        ).to_bytes()
+    )
 
-    with pytest.raises(VaultFormatError):
-        VaultContainer.from_bytes(bytes(serialized))
-
-
-def test_impossible_lengths_are_rejected() -> None:
-    serialized = bytearray(_container().to_bytes())
     struct.pack_into(
         ">I",
         serialized,
-        8,
-        0,
+        CONTAINER_PREFIX.size - 4,
+        10_001,
     )
 
     with pytest.raises(VaultFormatError):

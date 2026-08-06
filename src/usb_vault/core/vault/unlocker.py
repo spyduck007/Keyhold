@@ -28,7 +28,7 @@ def unlock_vault(
     keyfile_path: str | Path,
     password: str | bytes | bytearray | memoryview,
 ) -> VaultSession:
-    """Unlock a vault from disk or raise one generic authentication error."""
+    """Unlock a vault or raise one generic authentication error."""
     keyfile = read_usb_keyfile(keyfile_path)
     container = read_vault_container(vault_path)
 
@@ -53,13 +53,20 @@ def unlock_vault(
     manifest_bytes = decrypt_payload(
         container.encrypted_manifest,
         master_key,
-        associated_data=manifest_associated_data(container.header.vault_id),
+        associated_data=(manifest_associated_data(container.header.vault_id)),
     )
     manifest = VaultManifest.from_bytes(manifest_bytes)
+
+    expected_blob_ids = {entry.blob_id for entry in manifest.entries}
+    actual_blob_ids = {blob.blob_id for blob in container.blobs}
+
+    if expected_blob_ids != actual_blob_ids:
+        raise UnlockError
 
     return VaultSession.create(
         vault_path=vault_path,
         header=container.header,
         manifest=manifest,
         master_key=master_key,
+        blobs=container.blobs,
     )
