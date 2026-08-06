@@ -3,10 +3,14 @@
 import os
 import stat
 from pathlib import Path
+from typing import BinaryIO
 
 import pytest
 
-from usb_vault.core.storage.atomic_save import atomic_write_bytes
+from usb_vault.core.storage.atomic_save import (
+    atomic_write_bytes,
+    atomic_write_file,
+)
 
 
 def test_atomic_write_creates_private_file(
@@ -64,7 +68,9 @@ def test_atomic_write_leaves_no_temporary_file(
         b"data",
     )
 
-    assert sorted(path.name for path in tmp_path.iterdir()) == ["data.bin"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "data.bin",
+    ]
 
 
 def test_atomic_write_requires_existing_parent(
@@ -97,3 +103,53 @@ def test_atomic_write_does_not_follow_existing_symlink(
         )
 
     assert real_file.read_bytes() == b"original"
+
+
+def test_atomic_stream_writer_can_write_multiple_parts(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "stream.bin"
+
+    def write_parts(
+        output: BinaryIO,
+    ) -> None:
+        output.write(b"first")
+        output.write(b"-")
+        output.write(b"second")
+
+    atomic_write_file(
+        destination,
+        write_parts,
+    )
+
+    assert destination.read_bytes() == b"first-second"
+    permissions = stat.S_IMODE(destination.stat().st_mode)
+    assert permissions == 0o600
+
+
+def test_atomic_stream_failure_preserves_existing_file(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "stream.bin"
+    destination.write_bytes(b"original")
+
+    def fail_after_partial_write(
+        output: BinaryIO,
+    ) -> None:
+        output.write(b"partial")
+        raise RuntimeError("simulated failure")
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated failure",
+    ):
+        atomic_write_file(
+            destination,
+            fail_after_partial_write,
+            overwrite=True,
+        )
+
+    assert destination.read_bytes() == b"original"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "stream.bin",
+    ]
