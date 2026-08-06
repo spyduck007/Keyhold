@@ -19,13 +19,14 @@ from PySide6.QtWidgets import (
 
 
 class UnlockPage(QWidget):
-    """Collect a vault, optional USB keyfile, and password."""
+    """Collect a vault, optional keyfile, and password."""
 
     unlock_requested = Signal(
         str,
         str,
         str,
     )
+    cancel_requested = Signal()
 
     def __init__(
         self,
@@ -35,15 +36,17 @@ class UnlockPage(QWidget):
 
         self.setObjectName("unlockPage")
 
+        self._waiting_for_usb = False
+        self._unlocking = False
+
         title = QLabel("Unlock USB Vault")
         title.setObjectName("unlockTitle")
 
         subtitle = QLabel(
-            "Choose the encrypted vault, "
-            "insert a registered USB key, "
-            "and enter the password. "
-            "The keyfile will be detected "
-            "automatically."
+            "Enter the vault password and "
+            "continue. The app will wait for "
+            "a registered USB key and unlock "
+            "automatically when it appears."
         )
         subtitle.setWordWrap(True)
 
@@ -54,7 +57,7 @@ class UnlockPage(QWidget):
         self.keyfile_path_edit = QLineEdit()
         self.keyfile_path_edit.setObjectName("keyfilePathEdit")
         self.keyfile_path_edit.setPlaceholderText("Optional manual keyfile path")
-        self.keyfile_path_edit.setToolTip("Leave blank to scan mounted USB drives automatically.")
+        self.keyfile_path_edit.setToolTip("Leave blank to wait for a registered mounted USB key.")
 
         self.password_edit = QLineEdit()
         self.password_edit.setObjectName("passwordEdit")
@@ -65,21 +68,21 @@ class UnlockPage(QWidget):
         self.show_password_checkbox.setObjectName("showPasswordCheckbox")
         self.show_password_checkbox.toggled.connect(self._set_password_visible)
 
-        vault_browse_button = QPushButton("Browse…")
-        vault_browse_button.setObjectName("browseVaultButton")
-        vault_browse_button.clicked.connect(self._browse_vault)
+        self.vault_browse_button = QPushButton("Browse…")
+        self.vault_browse_button.setObjectName("browseVaultButton")
+        self.vault_browse_button.clicked.connect(self._browse_vault)
 
-        keyfile_browse_button = QPushButton("Browse manually…")
-        keyfile_browse_button.setObjectName("browseKeyfileButton")
-        keyfile_browse_button.clicked.connect(self._browse_keyfile)
+        self.keyfile_browse_button = QPushButton("Browse manually…")
+        self.keyfile_browse_button.setObjectName("browseKeyfileButton")
+        self.keyfile_browse_button.clicked.connect(self._browse_keyfile)
 
         vault_row = QHBoxLayout()
         vault_row.addWidget(self.vault_path_edit)
-        vault_row.addWidget(vault_browse_button)
+        vault_row.addWidget(self.vault_browse_button)
 
         keyfile_row = QHBoxLayout()
         keyfile_row.addWidget(self.keyfile_path_edit)
-        keyfile_row.addWidget(keyfile_browse_button)
+        keyfile_row.addWidget(self.keyfile_browse_button)
 
         form = QFormLayout()
         form.addRow(
@@ -99,16 +102,30 @@ class UnlockPage(QWidget):
             self.show_password_checkbox,
         )
 
+        self.waiting_label = QLabel()
+        self.waiting_label.setObjectName("usbUnlockWaitingLabel")
+        self.waiting_label.setWordWrap(True)
+        self.waiting_label.hide()
+
         self.error_label = QLabel()
         self.error_label.setObjectName("unlockErrorLabel")
         self.error_label.setWordWrap(True)
         self.error_label.hide()
 
-        self.unlock_button = QPushButton("Unlock")
+        self.cancel_button = QPushButton("Back to Vaults")
+        self.cancel_button.setObjectName("cancelUnlockButton")
+        self.cancel_button.clicked.connect(self.cancel_requested.emit)
+
+        self.unlock_button = QPushButton("Continue")
         self.unlock_button.setObjectName("unlockButton")
         self.unlock_button.setDefault(True)
         self.unlock_button.clicked.connect(self._emit_unlock)
         self.password_edit.returnPressed.connect(self._emit_unlock)
+
+        actions = QHBoxLayout()
+        actions.addWidget(self.cancel_button)
+        actions.addStretch()
+        actions.addWidget(self.unlock_button)
 
         layout = QVBoxLayout(self)
         layout.addStretch()
@@ -116,9 +133,77 @@ class UnlockPage(QWidget):
         layout.addWidget(subtitle)
         layout.addSpacing(12)
         layout.addLayout(form)
+        layout.addWidget(self.waiting_label)
         layout.addWidget(self.error_label)
-        layout.addWidget(self.unlock_button)
+        layout.addLayout(actions)
         layout.addStretch()
+
+    @property
+    def is_waiting_for_usb(self) -> bool:
+        """Return whether the page is waiting for a mounted key."""
+        return self._waiting_for_usb
+
+    @property
+    def is_unlocking(self) -> bool:
+        """Return whether authenticated unlock is running."""
+        return self._unlocking
+
+    def begin_waiting_for_usb(
+        self,
+    ) -> None:
+        """Switch the form into cancellable USB-waiting state."""
+        self._waiting_for_usb = True
+        self._unlocking = False
+
+        self._set_form_enabled(False)
+
+        self.waiting_label.setText(
+            (
+                "Waiting for a registered "
+                "USB key. Insert the key now. "
+                "Wrong or unrelated USB keys "
+                "will be ignored."
+            )
+        )
+        self.waiting_label.show()
+
+        self.unlock_button.setText("Waiting for USB…")
+        self.unlock_button.setEnabled(False)
+
+        self.cancel_button.setText("Cancel")
+        self.cancel_button.setEnabled(True)
+
+    def begin_unlocking(
+        self,
+    ) -> None:
+        """Show that a detected key is being authenticated."""
+        self._waiting_for_usb = False
+        self._unlocking = True
+
+        self._set_form_enabled(False)
+
+        self.waiting_label.setText(("Registered USB key detected. Unlocking the vault…"))
+        self.waiting_label.show()
+
+        self.unlock_button.setText("Unlocking…")
+        self.unlock_button.setEnabled(False)
+        self.cancel_button.setEnabled(False)
+
+    def end_waiting(self) -> None:
+        """Restore the editable password form."""
+        self._waiting_for_usb = False
+        self._unlocking = False
+
+        self._set_form_enabled(True)
+
+        self.waiting_label.clear()
+        self.waiting_label.hide()
+
+        self.unlock_button.setText("Continue")
+        self.unlock_button.setEnabled(True)
+
+        self.cancel_button.setText("Back to Vaults")
+        self.cancel_button.setEnabled(True)
 
     def show_error(
         self,
@@ -140,11 +225,15 @@ class UnlockPage(QWidget):
 
     def reset_after_lock(self) -> None:
         """Return the page to a safe locked state."""
+        self.end_waiting()
         self.clear_password()
         self.clear_error()
         self.password_edit.setFocus()
 
     def _emit_unlock(self) -> None:
+        if self._waiting_for_usb or self._unlocking:
+            return
+
         vault_path = self.vault_path_edit.text().strip()
         keyfile_path = self.keyfile_path_edit.text().strip()
         password = self.password_edit.text()
@@ -192,3 +281,17 @@ class UnlockPage(QWidget):
     ) -> None:
         echo_mode = QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
         self.password_edit.setEchoMode(echo_mode)
+
+    def _set_form_enabled(
+        self,
+        enabled: bool,
+    ) -> None:
+        for widget in (
+            self.vault_path_edit,
+            self.keyfile_path_edit,
+            self.password_edit,
+            self.show_password_checkbox,
+            self.vault_browse_button,
+            self.keyfile_browse_button,
+        ):
+            widget.setEnabled(enabled)

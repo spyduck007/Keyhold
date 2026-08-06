@@ -12,6 +12,9 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
+from usb_vault.ui.automatic_unlock_window import (
+    AutomaticUnlockMainWindow,
+)
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
     DEFAULT_USB_POLL_INTERVAL_MS,
@@ -19,9 +22,6 @@ from usb_vault.ui.session_guard import (
 from usb_vault.ui.usb_grace import (
     DEFAULT_USB_RECONNECT_GRACE_MS,
     UsbGraceSessionGuard,
-)
-from usb_vault.ui.vault_cards_window import (
-    VaultCardsMainWindow,
 )
 
 USB_POLL_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_POLL_SECONDS"
@@ -32,7 +32,7 @@ USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the card-based USB Vault application."""
+    """Launch the complete USB Vault MVP application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
@@ -63,7 +63,7 @@ def main(
         ),
     )
 
-    window = VaultCardsMainWindow(session_guard=session_guard)
+    window = AutomaticUnlockMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()
