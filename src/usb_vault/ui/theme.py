@@ -70,7 +70,7 @@ QLabel#selectedVaultLabel {
     border-radius: 8px;
     padding: 9px 11px;
 }
-QLineEdit, QPlainTextEdit, QListWidget, QTableWidget {
+QLineEdit, QComboBox, QPlainTextEdit, QListWidget, QTableWidget {
     background: #0d1726;
     border: 1px solid #2b3d55;
     border-radius: 9px;
@@ -78,10 +78,30 @@ QLineEdit, QPlainTextEdit, QListWidget, QTableWidget {
     selection-background-color: #245e69;
     selection-color: #ffffff;
 }
-QLineEdit:focus, QPlainTextEdit:focus, QListWidget:focus {
+QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QListWidget:focus {
     border: 1px solid #5ad4c3;
 }
-QLineEdit:disabled { color: #7890ad; background: #101927; }
+QLineEdit:disabled, QComboBox:disabled { color: #7890ad; background: #101927; }
+QComboBox { min-height: 20px; padding-right: 35px; }
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 32px;
+    background: #142238;
+    border-left: 1px solid #2b3d55;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+QComboBox::drop-down:hover { background: #1d3048; }
+QComboBox QAbstractItemView {
+    background: #142238;
+    border: 1px solid #3c536f;
+    border-radius: 8px;
+    padding: 4px;
+    selection-background-color: #245e69;
+    selection-color: #f8fbff;
+    outline: 0;
+}
 QPushButton, QCommandLinkButton {
     background: #1a2a40;
     border: 1px solid #304762;

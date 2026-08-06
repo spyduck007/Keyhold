@@ -109,5 +109,13 @@ class MacOsUsbVolumeLocator:
         ):
             return False
 
-        protocol = properties.get("Protocol")
-        return isinstance(protocol, str) and protocol.casefold() == "usb"
+        bus_protocol = properties.get("BusProtocol", properties.get("Protocol"))
+        is_internal = properties.get("Internal")
+        is_writable = properties.get("WritableVolume")
+
+        return (
+            isinstance(bus_protocol, str)
+            and bus_protocol.casefold() == "usb"
+            and is_internal is not True
+            and is_writable is not False
+        )

@@ -14,9 +14,9 @@ class FakeDiskutil:
 
     def __init__(
         self,
-        protocols: dict[Path, str],
+        bus_protocols: dict[Path, str],
     ) -> None:
-        self.protocols = protocols
+        self.bus_protocols = bus_protocols
         self.calls: list[tuple[str, ...]] = []
 
     def __call__(
@@ -27,15 +27,15 @@ class FakeDiskutil:
         del timeout
         self.calls.append(command)
         volume_path = Path(command[-1])
-        protocol = self.protocols.get(volume_path)
+        bus_protocol = self.bus_protocols.get(volume_path)
 
-        if protocol is None:
+        if bus_protocol is None:
             return subprocess.CompletedProcess(command, 1, "", "not found")
 
         return subprocess.CompletedProcess(
             command,
             0,
-            plistlib.dumps({"Protocol": protocol}).decode(),
+            plistlib.dumps({"BusProtocol": bus_protocol}).decode(),
             "",
         )
 

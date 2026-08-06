@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QPointF, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -26,6 +27,39 @@ from usb_vault.platform.macos.usb_volumes import (
 from usb_vault.ui.icons import app_icon
 
 DEFAULT_USB_KEYFILE_NAME = ".authkey"
+
+
+class UsbVolumeComboBox(QComboBox):
+    """A themed USB selector with a consistent, custom-drawn chevron."""
+
+    def paintEvent(
+        self,
+        event: QPaintEvent,
+    ) -> None:
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(
+            QColor("#9baec7" if self.isEnabled() else "#60748c"),
+            1.8,
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+        painter.setPen(pen)
+
+        center_x = self.width() - 17
+        center_y = self.height() / 2
+        painter.drawLine(
+            QPointF(center_x - 4, center_y - 2),
+            QPointF(center_x, center_y + 2),
+        )
+        painter.drawLine(
+            QPointF(center_x, center_y + 2),
+            QPointF(center_x + 4, center_y - 2),
+        )
+        painter.end()
 
 
 class SetupPage(QWidget):
@@ -74,7 +108,7 @@ class SetupPage(QWidget):
         self.keyfile_path_edit.setReadOnly(True)
         self.keyfile_path_edit.setPlaceholderText("Select an external USB to create .authkey")
 
-        self.usb_volume_combo = QComboBox()
+        self.usb_volume_combo = UsbVolumeComboBox()
         self.usb_volume_combo.setObjectName("usbVolumeComboBox")
         self.usb_volume_combo.setPlaceholderText("Select an external USB")
         self.usb_volume_combo.currentIndexChanged.connect(self._update_keyfile_path)
