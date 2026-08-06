@@ -40,3 +40,7 @@ class LastKeySlotError(VaultOperationError):
 
 class CurrentKeyRevocationError(VaultOperationError):
     """Raised when attempting to revoke the key used for the session."""
+
+
+class KeyfileSetError(VaultOperationError):
+    """Raised when password rotation lacks the exact registered key set."""

@@ -9,6 +9,9 @@ from pathlib import Path
 
 from usb_vault.cli.commands.add import run_add_command
 from usb_vault.cli.commands.add_key import run_add_key_command
+from usb_vault.cli.commands.change_password import (
+    run_change_password_command,
+)
 from usb_vault.cli.commands.create import run_create_command
 from usb_vault.cli.commands.delete import run_delete_command
 from usb_vault.cli.commands.extract import run_extract_command
@@ -135,6 +138,21 @@ def build_parser() -> argparse.ArgumentParser:
         help=("Confirm permanent key revocation."),
     )
 
+    change_password_parser = subparsers.add_parser(
+        "change-password",
+        help=("Change the password for every registered USB key."),
+    )
+    _add_vault_and_keyfile_arguments(change_password_parser)
+    change_password_parser.add_argument(
+        "--other-keyfile",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Another registered USB keyfile. Repeat once for every additional registered USB key."
+        ),
+    )
+
     return parser
 
 
@@ -181,7 +199,7 @@ def main(
                 keyfile_path=keyfile_path,
                 stored_name=arguments.name,
                 output_path=Path(arguments.output),
-                overwrite=arguments.overwrite,
+                overwrite=(arguments.overwrite),
             )
 
         if arguments.command == "delete":
@@ -208,8 +226,15 @@ def main(
             return run_revoke_key_command(
                 vault_path=vault_path,
                 keyfile_path=keyfile_path,
-                key_id_hex=arguments.key_id,
+                key_id_hex=(arguments.key_id),
                 confirmed=arguments.yes,
+            )
+
+        if arguments.command == "change-password":
+            return run_change_password_command(
+                vault_path=vault_path,
+                keyfile_path=(keyfile_path),
+                additional_keyfile_paths=tuple(arguments.other_keyfile),
             )
 
         parser.error("unsupported command")
