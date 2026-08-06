@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication,
+    QWidget,
 )
 from pytestqt.qtbot import QtBot
 
@@ -23,6 +24,9 @@ from usb_vault.ui.backend import (
 )
 from usb_vault.ui.main_window import (
     MainWindow,
+)
+from usb_vault.ui.setup_backend import (
+    CreatedVault,
 )
 
 
@@ -126,6 +130,44 @@ class FakeBackend:
         self.entries = tuple(entry for entry in self.entries if entry.name != stored_name)
 
         return removed
+
+
+@dataclass
+class FakeSetupBackend:
+    """In-memory setup backend."""
+
+    created_requests: list[
+        tuple[
+            Path,
+            Path,
+            str,
+        ]
+    ] = field(default_factory=list)
+
+    def create_vault(
+        self,
+        *,
+        vault_path: Path,
+        keyfile_path: Path,
+        password: str,
+    ) -> CreatedVault:
+        self.created_requests.append(
+            (
+                vault_path,
+                keyfile_path,
+                password,
+            )
+        )
+
+        return CreatedVault(
+            vault=UnlockedVault.create(
+                vault_path=vault_path,
+                keyfile_path=keyfile_path,
+                password=password,
+            ),
+            entries=(),
+            recovery_code=("UVR1-TEST-RECOVERY-CODE"),
+        )
 
 
 def _show_window(
@@ -247,3 +289,90 @@ def test_file_actions_refresh_browser(
         "notes.txt",
     ]
     assert window.vault_page.table.rowCount() == 1
+
+
+def test_new_vault_setup_opens_created_vault(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    setup_backend = FakeSetupBackend()
+    presented_codes: list[str] = []
+
+    def present_recovery_code(
+        parent: QWidget,
+        recovery_code: str,
+    ) -> None:
+        assert parent.objectName() == ("mainWindow")
+        presented_codes.append(recovery_code)
+
+    window = MainWindow(
+        backend=FakeBackend(entries=()),
+        setup_backend=setup_backend,
+        recovery_presenter=(present_recovery_code),
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    vault_path = tmp_path / "New.vault"
+    keyfile_path = tmp_path / ".authkey"
+
+    window.show_setup_page()
+
+    window.setup_page.vault_path_edit.setText(str(vault_path))
+    window.setup_page.keyfile_path_edit.setText(str(keyfile_path))
+    window.setup_page.password_edit.setText("new password")
+    window.setup_page.confirmation_edit.setText("new password")
+
+    QTest.mouseClick(
+        window.setup_page.create_button,
+        Qt.MouseButton.LeftButton,
+    )
+    QApplication.processEvents()
+
+    assert setup_backend.created_requests == [
+        (
+            vault_path,
+            keyfile_path,
+            "new password",
+        ),
+    ]
+    assert presented_codes == [
+        "UVR1-TEST-RECOVERY-CODE",
+    ]
+    assert window.is_unlocked
+    assert window.current_page_name == "vault"
+    assert window.setup_page.password_edit.text() == ""
+    assert window.unlock_page.vault_path_edit.text() == str(vault_path)
+
+
+def test_multiple_file_imports_are_processed(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    backend = FakeBackend(entries=())
+    window = MainWindow(backend=backend)
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    _fill_unlock_page(window)
+    _click_unlock(window)
+
+    first = tmp_path / "first.txt"
+    second = tmp_path / "second.txt"
+
+    result = window.add_files_from_paths(
+        (
+            first,
+            second,
+        )
+    )
+
+    assert result == (
+        2,
+        0,
+    )
+    assert backend.added_paths == [
+        first,
+        second,
+    ]
+    assert window.vault_page.table.rowCount() == 2

@@ -1,24 +1,41 @@
-"""Main desktop window for opening and browsing a vault."""
+"""Main desktop window for creating, opening, and browsing vaults."""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+)
 from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
     QMessageBox,
     QStackedWidget,
+    QWidget,
 )
 
 from usb_vault.core.errors import (
     VaultError,
 )
+from usb_vault.core.vault.operations import (
+    VaultEntrySummary,
+)
 from usb_vault.ui.backend import (
     CoreVaultBackend,
     UnlockedVault,
     VaultBackend,
+)
+from usb_vault.ui.drop_support import (
+    local_regular_file_paths,
+)
+from usb_vault.ui.pages.setup_page import (
+    SetupPage,
 )
 from usb_vault.ui.pages.unlock_page import (
     UnlockPage,
@@ -26,15 +43,32 @@ from usb_vault.ui.pages.unlock_page import (
 from usb_vault.ui.pages.vault_page import (
     VaultPage,
 )
+from usb_vault.ui.recovery_dialog import (
+    show_recovery_code,
+)
+from usb_vault.ui.setup_backend import (
+    CoreVaultSetupBackend,
+    VaultSetupBackend,
+)
+
+RecoveryPresenter = Callable[
+    [
+        QWidget,
+        str,
+    ],
+    None,
+]
 
 
 class MainWindow(QMainWindow):
-    """Coordinate the locked and unlocked desktop views."""
+    """Coordinate setup, locked, and unlocked desktop views."""
 
     def __init__(
         self,
         *,
         backend: VaultBackend | None = None,
+        setup_backend: (VaultSetupBackend | None) = None,
+        recovery_presenter: (RecoveryPresenter | None) = None,
     ) -> None:
         super().__init__()
 
@@ -44,19 +78,33 @@ class MainWindow(QMainWindow):
             780,
             520,
         )
+        self.setAcceptDrops(True)
 
         self._backend = backend if backend is not None else CoreVaultBackend()
+        self._setup_backend = (
+            setup_backend if setup_backend is not None else CoreVaultSetupBackend()
+        )
+        self._recovery_presenter = (
+            recovery_presenter if recovery_presenter is not None else show_recovery_code
+        )
         self._vault: UnlockedVault | None = None
 
         self.unlock_page = UnlockPage()
+        self.setup_page = SetupPage()
         self.vault_page = VaultPage()
 
         self._pages = QStackedWidget()
         self._pages.addWidget(self.unlock_page)
+        self._pages.addWidget(self.setup_page)
         self._pages.addWidget(self.vault_page)
         self.setCentralWidget(self._pages)
 
+        self._create_actions()
+        self._create_menu()
+
         self.unlock_page.unlock_requested.connect(self._on_unlock_requested)
+        self.setup_page.setup_requested.connect(self._on_setup_requested)
+        self.setup_page.cancel_requested.connect(self._show_unlock_page)
         self.vault_page.add_requested.connect(self._on_add_requested)
         self.vault_page.extract_requested.connect(self._on_extract_requested)
         self.vault_page.delete_requested.connect(self._on_delete_requested)
@@ -77,7 +125,22 @@ class MainWindow(QMainWindow):
         if current_widget is self.vault_page:
             return "vault"
 
+        if current_widget is self.setup_page:
+            return "setup"
+
         return "unlock"
+
+    def show_setup_page(self) -> None:
+        """Open a clean new-vault setup form."""
+        if self.is_unlocked:
+            self.lock_vault()
+
+        self.setup_page.reset()
+        self._pages.setCurrentWidget(self.setup_page)
+        self.statusBar().showMessage(
+            "Create a new encrypted vault.",
+            5_000,
+        )
 
     def refresh_entries(self) -> bool:
         """Reload decrypted metadata from the vault."""
@@ -124,6 +187,36 @@ class MainWindow(QMainWindow):
             5_000,
         )
         return True
+
+    def add_files_from_paths(
+        self,
+        source_paths: Sequence[Path],
+    ) -> tuple[int, int]:
+        """Add multiple selected or dropped files."""
+        added_count = 0
+        failed_count = 0
+
+        for source_path in source_paths:
+            if self.add_file_from_path(source_path):
+                added_count += 1
+            else:
+                failed_count += 1
+
+        if failed_count:
+            self.statusBar().showMessage(
+                (f"Added {added_count} file(s); {failed_count} failed."),
+                8_000,
+            )
+        else:
+            self.statusBar().showMessage(
+                (f"Added {added_count} file(s)."),
+                5_000,
+            )
+
+        return (
+            added_count,
+            failed_count,
+        )
 
     def extract_entry_to(
         self,
@@ -193,12 +286,53 @@ class MainWindow(QMainWindow):
 
         self.vault_page.clear_entries()
         self.unlock_page.reset_after_lock()
+        self.lock_action.setEnabled(False)
         self._show_unlock_page()
 
         self.statusBar().showMessage(
             "Vault locked.",
             5_000,
         )
+
+    def dragEnterEvent(
+        self,
+        event: QDragEnterEvent,
+    ) -> None:
+        """Accept local regular files while the vault is unlocked."""
+        paths = local_regular_file_paths(event.mimeData())
+
+        if self.is_unlocked and paths:
+            event.acceptProposedAction()
+            return
+
+        event.ignore()
+
+    def dragMoveEvent(
+        self,
+        event: QDragMoveEvent,
+    ) -> None:
+        """Continue accepting valid file drags."""
+        paths = local_regular_file_paths(event.mimeData())
+
+        if self.is_unlocked and paths:
+            event.acceptProposedAction()
+            return
+
+        event.ignore()
+
+    def dropEvent(
+        self,
+        event: QDropEvent,
+    ) -> None:
+        """Encrypt dropped local files into the open vault."""
+        paths = local_regular_file_paths(event.mimeData())
+
+        if not self.is_unlocked or not paths:
+            event.ignore()
+            return
+
+        event.acceptProposedAction()
+        self.add_files_from_paths(paths)
 
     def closeEvent(
         self,
@@ -207,6 +341,73 @@ class MainWindow(QMainWindow):
         """Clear UI session credentials before closing."""
         self.lock_vault()
         super().closeEvent(event)
+
+    def _create_actions(self) -> None:
+        self.new_vault_action = QAction(
+            "New Vault…",
+            self,
+        )
+        self.new_vault_action.setObjectName("newVaultAction")
+        self.new_vault_action.triggered.connect(self.show_setup_page)
+
+        self.lock_action = QAction(
+            "Lock Vault",
+            self,
+        )
+        self.lock_action.setObjectName("lockVaultAction")
+        self.lock_action.setEnabled(False)
+        self.lock_action.triggered.connect(self.lock_vault)
+
+    def _create_menu(self) -> None:
+        file_menu = self.menuBar().addMenu("&File")
+        file_menu.addAction(self.new_vault_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.lock_action)
+
+    def _on_setup_requested(
+        self,
+        vault_path: str,
+        keyfile_path: str,
+        password: str,
+    ) -> None:
+        try:
+            created = self._setup_backend.create_vault(
+                vault_path=Path(vault_path),
+                keyfile_path=Path(keyfile_path),
+                password=password,
+            )
+        except (
+            VaultError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as error:
+            self.setup_page.clear_sensitive_fields()
+            self.setup_page.show_error(str(error))
+            self.statusBar().showMessage(
+                "Vault creation failed.",
+                8_000,
+            )
+            return
+
+        self.setup_page.clear_sensitive_fields()
+
+        self.unlock_page.vault_path_edit.setText(str(created.vault.vault_path))
+        self.unlock_page.keyfile_path_edit.setText(str(created.vault.keyfile_path))
+
+        self._recovery_presenter(
+            self,
+            created.recovery_code,
+        )
+        self._activate_vault(
+            created.vault,
+            created.entries,
+        )
+
+        self.statusBar().showMessage(
+            "Vault created and unlocked.",
+            8_000,
+        )
 
     def _on_unlock_requested(
         self,
@@ -239,28 +440,39 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if self._vault is not None:
-            self._vault.close()
-
-        self._vault = candidate
         self.unlock_page.clear_password()
-        self.vault_page.set_vault_path(vault_path)
-        self.vault_page.set_entries(entries)
-        self._pages.setCurrentWidget(self.vault_page)
+        self._activate_vault(
+            candidate,
+            entries,
+        )
 
         self.statusBar().showMessage(
             "Vault unlocked.",
             5_000,
         )
 
+    def _activate_vault(
+        self,
+        vault: UnlockedVault,
+        entries: Sequence[VaultEntrySummary],
+    ) -> None:
+        if self._vault is not None:
+            self._vault.close()
+
+        self._vault = vault
+        self.vault_page.set_vault_path(str(vault.vault_path))
+        self.vault_page.set_entries(entries)
+        self.lock_action.setEnabled(True)
+        self._pages.setCurrentWidget(self.vault_page)
+
     def _on_add_requested(self) -> None:
-        selected_path, _ = QFileDialog.getOpenFileName(
+        selected_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Add file to vault",
+            "Add files to vault",
         )
 
-        if selected_path:
-            self.add_file_from_path(Path(selected_path))
+        if selected_paths:
+            self.add_files_from_paths(tuple(Path(path) for path in selected_paths))
 
     def _on_extract_requested(
         self,
