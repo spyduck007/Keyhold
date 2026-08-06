@@ -14,6 +14,29 @@ PRIVATE_FILE_MODE = 0o600
 
 AtomicFileWriter = Callable[[BinaryIO], None]
 
+_HARD_LINK_FALLBACK_ERRNOS = frozenset(
+    {
+        errno.EINVAL,
+        errno.EMLINK,
+        errno.EPERM,
+        getattr(
+            errno,
+            "ENOSYS",
+            errno.EINVAL,
+        ),
+        getattr(
+            errno,
+            "ENOTSUP",
+            errno.EINVAL,
+        ),
+        getattr(
+            errno,
+            "EOPNOTSUPP",
+            errno.EINVAL,
+        ),
+    }
+)
+
 
 def atomic_write_bytes(
     path: str | Path,
@@ -90,11 +113,11 @@ def atomic_write_file(
                 destination,
             )
         else:
-            os.link(
+            _publish_without_overwrite(
                 temporary_path,
                 destination,
+                mode=mode,
             )
-            temporary_path.unlink()
 
         _fsync_directory(parent)
     finally:
@@ -103,6 +126,118 @@ def atomic_write_file(
 
         with suppress(FileNotFoundError):
             temporary_path.unlink()
+
+
+def _publish_without_overwrite(
+    temporary_path: Path,
+    destination: Path,
+    *,
+    mode: int,
+) -> None:
+    """Publish without replacing an existing destination."""
+    try:
+        os.link(
+            temporary_path,
+            destination,
+        )
+    except FileExistsError:
+        raise FileExistsError(f"destination already exists: {destination}") from None
+    except OSError as error:
+        if error.errno not in _HARD_LINK_FALLBACK_ERRNOS:
+            raise
+
+        _publish_with_exclusive_reservation(
+            temporary_path,
+            destination,
+            mode=mode,
+        )
+    else:
+        temporary_path.unlink()
+
+
+def _publish_with_exclusive_reservation(
+    temporary_path: Path,
+    destination: Path,
+    *,
+    mode: int,
+) -> None:
+    """Publish on filesystems that do not support hard links."""
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(
+            os,
+            "O_CLOEXEC",
+            0,
+        )
+        | getattr(
+            os,
+            "O_NOFOLLOW",
+            0,
+        )
+    )
+
+    try:
+        reservation_descriptor = os.open(
+            destination,
+            flags,
+            mode,
+        )
+    except FileExistsError:
+        raise FileExistsError(f"destination already exists: {destination}") from None
+
+    reservation_status = os.fstat(reservation_descriptor)
+
+    try:
+        current_status = os.stat(
+            destination,
+            follow_symlinks=False,
+        )
+
+        if not os.path.samestat(
+            reservation_status,
+            current_status,
+        ):
+            raise FileExistsError(
+                f"destination changed while the file was being written: {destination}"
+            )
+
+        os.replace(
+            temporary_path,
+            destination,
+        )
+    except BaseException:
+        _remove_exclusive_reservation(
+            destination,
+            reservation_status,
+        )
+        raise
+    finally:
+        os.close(reservation_descriptor)
+
+
+def _remove_exclusive_reservation(
+    destination: Path,
+    reservation_status: os.stat_result,
+) -> None:
+    """Remove a failed reservation only when it is still ours."""
+    try:
+        current_status = os.stat(
+            destination,
+            follow_symlinks=False,
+        )
+    except OSError:
+        return
+
+    if not os.path.samestat(
+        reservation_status,
+        current_status,
+    ):
+        return
+
+    with suppress(OSError):
+        destination.unlink()
 
 
 def _fsync_directory(

@@ -1,5 +1,6 @@
 """Tests for atomic private file writes."""
 
+import errno
 import os
 import stat
 from pathlib import Path
@@ -153,3 +154,132 @@ def test_atomic_stream_failure_preserves_existing_file(
     assert sorted(path.name for path in tmp_path.iterdir()) == [
         "stream.bin",
     ]
+
+
+def test_atomic_write_falls_back_when_hard_links_are_unsupported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "data.bin"
+
+    def unsupported_link(
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del args
+        del kwargs
+
+        raise OSError(
+            errno.ENOTSUP,
+            "Operation not supported",
+        )
+
+    monkeypatch.setattr(
+        os,
+        "link",
+        unsupported_link,
+    )
+
+    atomic_write_bytes(
+        destination,
+        b"removable drive data",
+    )
+
+    assert destination.read_bytes() == b"removable drive data"
+    permissions = stat.S_IMODE(destination.stat().st_mode)
+    assert permissions == 0o600
+
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "data.bin",
+    ]
+
+
+def test_hard_link_fallback_does_not_overwrite_racing_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "data.bin"
+
+    def racing_link(
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del args
+        del kwargs
+
+        destination.write_bytes(b"racing file")
+        raise OSError(
+            errno.ENOTSUP,
+            "Operation not supported",
+        )
+
+    monkeypatch.setattr(
+        os,
+        "link",
+        racing_link,
+    )
+
+    with pytest.raises(FileExistsError):
+        atomic_write_bytes(
+            destination,
+            b"must not overwrite",
+        )
+
+    assert destination.read_bytes() == b"racing file"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "data.bin",
+    ]
+
+
+def test_hard_link_fallback_cleans_failed_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "data.bin"
+
+    def unsupported_link(
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del args
+        del kwargs
+
+        raise OSError(
+            errno.ENOTSUP,
+            "Operation not supported",
+        )
+
+    def failed_replace(
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del args
+        del kwargs
+
+        raise OSError(
+            errno.EIO,
+            "simulated replace failure",
+        )
+
+    monkeypatch.setattr(
+        os,
+        "link",
+        unsupported_link,
+    )
+    monkeypatch.setattr(
+        os,
+        "replace",
+        failed_replace,
+    )
+
+    with pytest.raises(
+        OSError,
+        match=("simulated replace failure"),
+    ):
+        atomic_write_bytes(
+            destination,
+            b"data",
+        )
+
+    assert not destination.exists()
+    assert list(tmp_path.iterdir()) == []

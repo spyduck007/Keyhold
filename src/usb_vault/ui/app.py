@@ -10,23 +10,27 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from usb_vault.ui.rename_window import (
-    RenameMainWindow,
-)
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
     DEFAULT_USB_POLL_INTERVAL_MS,
-    SessionGuard,
+)
+from usb_vault.ui.usb_grace import (
+    DEFAULT_USB_RECONNECT_GRACE_MS,
+    UsbGraceSessionGuard,
+)
+from usb_vault.ui.usb_grace_window import (
+    UsbGraceMainWindow,
 )
 
 USB_POLL_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_POLL_SECONDS"
 IDLE_TIMEOUT_ENVIRONMENT_VARIABLE = "USB_VAULT_IDLE_TIMEOUT_SECONDS"
+USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 
 
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the fully responsive monitored desktop application."""
+    """Launch the responsive USB-monitored desktop application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
@@ -36,7 +40,7 @@ def main(
     application.setApplicationName("USB Vault")
     application.setOrganizationName("USB Vault")
 
-    session_guard = SessionGuard(
+    session_guard = UsbGraceSessionGuard(
         usb_poll_interval_ms=(
             _environment_duration_ms(
                 USB_POLL_ENVIRONMENT_VARIABLE,
@@ -49,9 +53,15 @@ def main(
                 DEFAULT_IDLE_TIMEOUT_MS,
             )
         ),
+        usb_reconnect_grace_ms=(
+            _environment_duration_ms(
+                USB_GRACE_ENVIRONMENT_VARIABLE,
+                DEFAULT_USB_RECONNECT_GRACE_MS,
+            )
+        ),
     )
 
-    window = RenameMainWindow(session_guard=session_guard)
+    window = UsbGraceMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()
