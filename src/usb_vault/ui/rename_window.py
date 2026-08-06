@@ -28,6 +28,7 @@ from usb_vault.ui.background_backend import (
 from usb_vault.ui.fully_async_window import (
     FullyAsyncSecurityMainWindow,
 )
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.main_window import (
     RecoveryPresenter,
 )
@@ -89,6 +90,7 @@ class RenameMainWindow(FullyAsyncSecurityMainWindow):
             self,
         )
         self.rename_action.setObjectName("renameEntryAction")
+        self.rename_action.setIcon(app_icon("edit"))
         self.rename_action.setShortcut("F2")
         self.rename_action.setEnabled(False)
         self.rename_action.triggered.connect(self._on_rename_requested)
@@ -217,9 +219,5 @@ class RenameMainWindow(FullyAsyncSecurityMainWindow):
         self,
     ) -> None:
         self.rename_action.setEnabled(
-            (
-                self.is_unlocked
-                and not self.is_busy
-                and (self.vault_page.selected_name() is not None)
-            )
+            self.is_unlocked and not self.is_busy and (self.vault_page.selected_name() is not None)
         )

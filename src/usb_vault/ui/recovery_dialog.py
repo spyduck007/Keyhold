@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
@@ -13,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from usb_vault.ui.icons import app_icon
 
 
 class RecoveryCodeDialog(QDialog):
@@ -39,10 +42,10 @@ class RecoveryCodeDialog(QDialog):
         self.setObjectName("recoveryCodeDialog")
         self.setWindowTitle("Save Recovery Code")
         self.setModal(True)
-        self.resize(
-            620,
-            300,
-        )
+        self.resize(680, 390)
+
+        eyebrow = QLabel("RECOVERY CODE")
+        eyebrow.setObjectName("recoveryEyebrow")
 
         title = QLabel("Save your recovery code")
         title.setObjectName("recoveryCodeTitle")
@@ -52,7 +55,11 @@ class RecoveryCodeDialog(QDialog):
             "It can restore USB access when used with "
             "the vault password. It will not be shown again."
         )
+        explanation.setObjectName("recoveryCodeExplanation")
         explanation.setWordWrap(True)
+
+        warning = QLabel("Shown once — keep it offline and private.")
+        warning.setObjectName("recoveryCodeWarning")
 
         self.code_edit = QPlainTextEdit()
         self.code_edit.setObjectName("recoveryCodeEdit")
@@ -62,6 +69,7 @@ class RecoveryCodeDialog(QDialog):
 
         self.copy_button = QPushButton("Copy Code")
         self.copy_button.setObjectName("copyRecoveryCodeButton")
+        self.copy_button.setIcon(app_icon("copy"))
         self.copy_button.clicked.connect(self._copy_code)
 
         self.copy_status_label = QLabel()
@@ -73,6 +81,7 @@ class RecoveryCodeDialog(QDialog):
 
         self.done_button = QPushButton("Continue")
         self.done_button.setObjectName("finishRecoveryCodeButton")
+        self.done_button.setIcon(app_icon("arrow_right", "#09201f"))
         self.done_button.setEnabled(False)
         self.done_button.clicked.connect(self.accept)
 
@@ -83,13 +92,25 @@ class RecoveryCodeDialog(QDialog):
         buttons.addStretch()
         buttons.addWidget(self.done_button)
 
+        surface = QFrame()
+        surface.setObjectName("dialogSurface")
+        surface_layout = QVBoxLayout(surface)
+        surface_layout.setContentsMargins(20, 18, 20, 18)
+        surface_layout.setSpacing(10)
+        surface_layout.addWidget(warning)
+        surface_layout.addWidget(self.code_edit)
+        surface_layout.addWidget(self.copy_status_label)
+        surface_layout.addWidget(self.acknowledgement_checkbox)
+        surface_layout.addLayout(buttons)
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(8)
+        layout.addWidget(eyebrow)
         layout.addWidget(title)
         layout.addWidget(explanation)
-        layout.addWidget(self.code_edit)
-        layout.addWidget(self.copy_status_label)
-        layout.addWidget(self.acknowledgement_checkbox)
-        layout.addLayout(buttons)
+        layout.addSpacing(8)
+        layout.addWidget(surface)
 
     def reject(self) -> None:
         """Prevent dismissal before the user acknowledges saving it."""

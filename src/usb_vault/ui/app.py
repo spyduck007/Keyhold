@@ -19,6 +19,9 @@ from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
     DEFAULT_USB_POLL_INTERVAL_MS,
 )
+from usb_vault.ui.theme import (
+    apply_application_theme,
+)
 from usb_vault.ui.usb_grace import (
     DEFAULT_USB_RECONNECT_GRACE_MS,
     UsbGraceSessionGuard,
@@ -41,6 +44,7 @@ def main(
     application = QApplication(arguments)
     application.setApplicationName("USB Vault")
     application.setOrganizationName("USB Vault")
+    apply_application_theme(application)
 
     session_guard = UsbGraceSessionGuard(
         usb_poll_interval_ms=(

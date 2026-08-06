@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
     QMessageBox,
-    QStackedWidget,
     QWidget,
 )
 
@@ -26,6 +25,8 @@ from usb_vault.core.errors import (
 from usb_vault.core.vault.operations import (
     VaultEntrySummary,
 )
+from usb_vault.platform.macos.usb_ejection import MacOsSessionUsbEjector
+from usb_vault.ui.animated_stack import AnimatedStackedWidget
 from usb_vault.ui.backend import (
     CoreVaultBackend,
     UnlockedVault,
@@ -34,6 +35,7 @@ from usb_vault.ui.backend import (
 from usb_vault.ui.drop_support import (
     local_regular_file_paths,
 )
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.pages.setup_page import (
     SetupPage,
 )
@@ -69,15 +71,15 @@ class MainWindow(QMainWindow):
         backend: VaultBackend | None = None,
         setup_backend: (VaultSetupBackend | None) = None,
         recovery_presenter: (RecoveryPresenter | None) = None,
+        usb_ejector: MacOsSessionUsbEjector | None = None,
     ) -> None:
         super().__init__()
 
         self.setObjectName("mainWindow")
         self.setWindowTitle("USB Vault")
-        self.resize(
-            780,
-            520,
-        )
+        self.setWindowIcon(app_icon("shield", "#61d7c5"))
+        self.resize(980, 680)
+        self.setMinimumSize(760, 520)
         self.setAcceptDrops(True)
 
         self._backend = backend if backend is not None else CoreVaultBackend()
@@ -88,12 +90,13 @@ class MainWindow(QMainWindow):
             recovery_presenter if recovery_presenter is not None else show_recovery_code
         )
         self._vault: UnlockedVault | None = None
+        self._usb_ejector = usb_ejector if usb_ejector is not None else MacOsSessionUsbEjector()
 
         self.unlock_page = UnlockPage()
         self.setup_page = SetupPage()
         self.vault_page = VaultPage()
 
-        self._pages = QStackedWidget()
+        self._pages = AnimatedStackedWidget()
         self._pages.addWidget(self.unlock_page)
         self._pages.addWidget(self.setup_page)
         self._pages.addWidget(self.vault_page)
@@ -340,6 +343,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Clear UI session credentials before closing."""
         self.lock_vault()
+        self._usb_ejector.eject_accessed_volumes()
         super().closeEvent(event)
 
     def _create_actions(self) -> None:
@@ -348,6 +352,7 @@ class MainWindow(QMainWindow):
             self,
         )
         self.new_vault_action.setObjectName("newVaultAction")
+        self.new_vault_action.setIcon(app_icon("plus"))
         self.new_vault_action.triggered.connect(self.show_setup_page)
 
         self.lock_action = QAction(
@@ -355,6 +360,7 @@ class MainWindow(QMainWindow):
             self,
         )
         self.lock_action.setObjectName("lockVaultAction")
+        self.lock_action.setIcon(app_icon("lock"))
         self.lock_action.setEnabled(False)
         self.lock_action.triggered.connect(self.lock_vault)
 
@@ -370,6 +376,8 @@ class MainWindow(QMainWindow):
         keyfile_path: str,
         password: str,
     ) -> None:
+        self._usb_ejector.record_keyfile_path(Path(keyfile_path))
+
         try:
             created = self._setup_backend.create_vault(
                 vault_path=Path(vault_path),
@@ -415,6 +423,7 @@ class MainWindow(QMainWindow):
         keyfile_path: str,
         password: str,
     ) -> None:
+        self._usb_ejector.record_keyfile_path(Path(keyfile_path))
         candidate: UnlockedVault | None = None
 
         try:
@@ -460,6 +469,7 @@ class MainWindow(QMainWindow):
             self._vault.close()
 
         self._vault = vault
+        self._usb_ejector.record_keyfile_path(vault.keyfile_path)
         self.vault_page.set_vault_path(str(vault.vault_path))
         self.vault_page.set_entries(entries)
         self.lock_action.setEnabled(True)
@@ -544,3 +554,7 @@ class MainWindow(QMainWindow):
             message,
             8_000,
         )
+
+    def _record_additional_usb_keyfiles(self, keyfile_paths: Sequence[Path]) -> None:
+        """Remember extra USB keys used by a security-management workflow."""
+        self._usb_ejector.record_keyfile_paths(keyfile_paths)

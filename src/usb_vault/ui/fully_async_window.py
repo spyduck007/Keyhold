@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import (
-    Callable,
     Sequence,
 )
 from dataclasses import dataclass
@@ -113,6 +112,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self._show_busy_message()
             return
 
+        self._usb_ejector.record_keyfile_path(Path(keyfile_path))
         password_secret = MutableTextSecret.from_text(password)
         self.unlock_page.clear_password()
 
@@ -181,6 +181,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self._show_busy_message()
             return
 
+        self._usb_ejector.record_keyfile_path(Path(keyfile_path))
         password_secret = MutableTextSecret.from_text(password)
         self.setup_page.clear_sensitive_fields()
 
@@ -249,6 +250,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self._show_busy_message()
             return
 
+        self._usb_ejector.record_keyfile_path(Path(new_keyfile_path))
         password_secret = MutableTextSecret.from_text(password)
         recovery_secret = MutableTextSecret.from_text(recovery_code)
         self.recovery_page.clear_sensitive_fields()
@@ -401,6 +403,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self._show_busy_message()
             return
 
+        self._usb_ejector.record_keyfile_path(Path(new_keyfile_path))
         active_vault = self._require_vault()
         task_vault = _copy_unlocked_vault(active_vault)
 
@@ -554,6 +557,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self.security_page.show_error(str(error))
             return
 
+        self._record_additional_usb_keyfiles(paths)
         active_vault = self._require_vault()
         task_vault = _copy_unlocked_vault(active_vault)
 
@@ -656,14 +660,13 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self.security_page.clear_error()
             return
 
-        self.security_page.show_error(
-            (
-                "The USB-key change succeeded, "
-                "but the settings could not be "
-                "refreshed: "
-                f"{result.refresh_error}"
-            )
+        refresh_error_message = (
+            "The USB-key change succeeded, "
+            "but the settings could not be "
+            "refreshed: "
+            f"{result.refresh_error}"
         )
+        self.security_page.show_error(refresh_error_message)
 
     def _start_workflow_task(
         self,
@@ -726,7 +729,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
             self._allow_manual_lock_during_task = True
 
     def _show_protocol_error(self) -> None:
-        self._show_status_error(("Background operation returned an invalid result."))
+        self._show_status_error("Background operation returned an invalid result.")
 
 
 def _copy_unlocked_vault(

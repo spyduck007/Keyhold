@@ -6,11 +6,13 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from PySide6.QtCore import (
+    QSize,
+    Qt,
     Signal,
 )
 from PySide6.QtWidgets import (
-    QCommandLinkButton,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.vault_library import (
     VaultLibraryEntry,
 )
@@ -48,40 +51,52 @@ class VaultCard(QFrame):
 
         self.setObjectName("vaultCard")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setFrameShadow(QFrame.Shadow.Raised)
+        self.setProperty("available", entry.is_available)
 
         availability_text = (
             "Available" if entry.is_available else ("Unavailable — vault file not found")
         )
 
-        description = (
-            f"{availability_text}\n"
-            f"{entry.vault_path}\n"
-            "Last opened: "
-            f"{_format_last_opened(entry.last_opened_at)}"
-        )
-
-        self.open_button = QCommandLinkButton(entry.display_name)
+        self.open_button = QPushButton(entry.display_name)
         self.open_button.setObjectName("openVaultCardButton")
-        self.open_button.setDescription(description)
+        self.open_button.setIcon(app_icon("lock", "#70e1d0"))
+        self.open_button.setIconSize(QSize(20, 20))
         self.open_button.setEnabled(entry.is_available)
         self.open_button.clicked.connect(self._emit_open)
 
-        self.rename_button = QPushButton("Rename…")
+        status = QLabel(availability_text)
+        status.setObjectName("vaultCardStatus")
+        status.setProperty("available", entry.is_available)
+
+        metadata = QLabel(
+            f"{entry.vault_path}\nLast opened {_format_last_opened(entry.last_opened_at)}"
+        )
+        metadata.setObjectName("vaultCardMeta")
+        metadata.setWordWrap(True)
+
+        self.rename_button = QPushButton("Rename")
         self.rename_button.setObjectName("renameVaultCardButton")
+        self.rename_button.setIcon(app_icon("edit"))
         self.rename_button.clicked.connect(self._emit_rename)
 
         self.remove_button = QPushButton("Remove")
         self.remove_button.setObjectName("removeVaultCardButton")
+        self.remove_button.setIcon(app_icon("trash", "#ffb2b2"))
         self.remove_button.clicked.connect(self._emit_remove)
 
         actions = QHBoxLayout()
-        actions.addStretch()
+        actions.setContentsMargins(0, 0, 0, 0)
         actions.addWidget(self.rename_button)
         actions.addWidget(self.remove_button)
+        actions.addStretch()
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 17, 18, 15)
+        layout.setSpacing(8)
         layout.addWidget(self.open_button)
+        layout.addWidget(status)
+        layout.addWidget(metadata)
+        layout.addSpacing(4)
         layout.addLayout(actions)
 
     @property
@@ -129,25 +144,31 @@ class VaultLibraryPage(QWidget):
             VaultCard,
         ] = {}
 
-        title = QLabel("Your Vaults")
+        eyebrow = QLabel("USB VAULT")
+        eyebrow.setObjectName("vaultLibraryEyebrow")
+
+        title = QLabel("Your vaults")
         title.setObjectName("vaultLibraryTitle")
 
         subtitle = QLabel(
-            "Choose a vault, enter its password, and use a registered USB key to unlock it."
+            "Choose a vault to enter its password. Your registered USB key completes the unlock."
         )
         subtitle.setObjectName("vaultLibrarySubtitle")
         subtitle.setWordWrap(True)
 
-        self.create_button = QPushButton("Create New Vault")
+        self.create_button = QPushButton("Create vault")
         self.create_button.setObjectName("createVaultFromLibraryButton")
+        self.create_button.setIcon(app_icon("plus", "#09201f"))
         self.create_button.clicked.connect(self.create_requested.emit)
 
-        self.add_existing_button = QPushButton("Add Existing Vault…")
+        self.add_existing_button = QPushButton("Add existing vault")
         self.add_existing_button.setObjectName("addExistingVaultButton")
+        self.add_existing_button.setIcon(app_icon("folder"))
         self.add_existing_button.clicked.connect(self.add_existing_requested.emit)
 
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("refreshVaultLibraryButton")
+        self.refresh_button.setIcon(app_icon("refresh"))
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
 
         actions = QHBoxLayout()
@@ -164,22 +185,29 @@ class VaultLibraryPage(QWidget):
         self._cards_widget = QWidget()
         self._cards_widget.setObjectName("vaultCardsContainer")
 
-        self._cards_layout = QVBoxLayout(self._cards_widget)
+        self._cards_layout = QGridLayout(self._cards_widget)
         self._cards_layout.setContentsMargins(
             0,
             0,
             0,
             0,
         )
-        self._cards_layout.setSpacing(12)
+        self._cards_layout.setHorizontalSpacing(14)
+        self._cards_layout.setVerticalSpacing(14)
+        self._cards_layout.setColumnStretch(0, 1)
+        self._cards_layout.setColumnStretch(1, 1)
 
         scroll_area = QScrollArea()
         scroll_area.setObjectName("vaultLibraryScrollArea")
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         scroll_area.setWidget(self._cards_widget)
+        scroll_area.viewport().setStyleSheet("background: #0b1220;")
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(34, 30, 34, 28)
+        layout.setSpacing(8)
+        layout.addWidget(eyebrow)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(8)
@@ -232,28 +260,51 @@ class VaultLibraryPage(QWidget):
         self._entries = normalized_entries
 
         if not normalized_entries:
-            empty_label = QLabel(
-                "No vaults have been added yet.\n\n"
-                "Create a new vault or add an "
-                "existing encrypted vault."
-            )
-            empty_label.setObjectName("emptyVaultLibraryLabel")
-            empty_label.setWordWrap(True)
+            empty_state = QFrame()
+            empty_state.setObjectName("emptyState")
+            empty_state.setMaximumHeight(230)
 
-            self._cards_layout.addWidget(empty_label)
-            self._cards_layout.addStretch()
+            empty_icon = QLabel()
+            empty_icon.setPixmap(app_icon("folder", "#61d7c5").pixmap(42, 42))
+            empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            empty_title = QLabel("Your encrypted space starts here")
+            empty_title.setObjectName("emptyStateTitle")
+            empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            empty_description = QLabel(
+                "Create a new vault, or add one that already exists on this Mac."
+            )
+            empty_description.setObjectName("emptyStateDescription")
+            empty_description.setWordWrap(True)
+            empty_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            empty_layout = QVBoxLayout(empty_state)
+            empty_layout.setContentsMargins(28, 30, 28, 30)
+            empty_layout.setSpacing(9)
+            empty_layout.addWidget(empty_icon)
+            empty_layout.addWidget(empty_title)
+            empty_layout.addWidget(empty_description)
+
+            legacy_empty_label = QLabel()
+            legacy_empty_label.setObjectName("emptyVaultLibraryLabel")
+            legacy_empty_label.hide()
+            empty_layout.addWidget(legacy_empty_label)
+
+            self._cards_layout.addWidget(empty_state, 0, 0, 1, 2)
+            self._cards_layout.setRowStretch(1, 1)
             return
 
-        for entry in normalized_entries:
+        for index, entry in enumerate(normalized_entries):
             card = VaultCard(entry)
             card.open_requested.connect(self._forward_open)
             card.rename_requested.connect(self._forward_rename)
             card.remove_requested.connect(self._forward_remove)
 
             self._cards[entry.vault_id] = card
-            self._cards_layout.addWidget(card)
+            self._cards_layout.addWidget(card, index // 2, index % 2)
 
-        self._cards_layout.addStretch()
+        self._cards_layout.setRowStretch((len(normalized_entries) + 1) // 2, 1)
 
     def show_error(
         self,
@@ -278,9 +329,13 @@ class VaultLibraryPage(QWidget):
 
         while self._cards_layout.count() > 0:
             item = self._cards_layout.takeAt(0)
+            if item is None:
+                continue
+
             widget = item.widget()
 
             if widget is not None:
+                widget.hide()
                 widget.deleteLater()
 
     def _forward_open(

@@ -20,6 +20,7 @@ from usb_vault.ui.backend import (
     UnlockedVault,
     VaultBackend,
 )
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.main_window import (
     RecoveryPresenter,
 )
@@ -83,6 +84,7 @@ class SecurityMainWindow(RecoveryMainWindow):
             self,
         )
         self.security_action.setObjectName("vaultSecurityAction")
+        self.security_action.setIcon(app_icon("key"))
         self.security_action.setEnabled(False)
         self.security_action.triggered.connect(self.show_security_page)
 
@@ -189,6 +191,7 @@ class SecurityMainWindow(RecoveryMainWindow):
             return
 
         self._refresh_security_snapshot()
+        self._record_additional_usb_keyfiles((Path(new_keyfile_path),))
         self.statusBar().showMessage(
             (f"Backup USB created. Key ID: {result.key_id_hex}"),
             10_000,
@@ -242,6 +245,7 @@ class SecurityMainWindow(RecoveryMainWindow):
     ) -> None:
         try:
             paths = _path_sequence(additional_keyfile_paths)
+            self._record_additional_usb_keyfiles(paths)
             updated = self._security_backend.change_password(
                 self._require_vault(),
                 current_password=(current_password),

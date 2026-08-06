@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -14,6 +15,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from usb_vault.ui.icons import app_icon
 
 
 class SetupPage(QWidget):
@@ -34,10 +37,14 @@ class SetupPage(QWidget):
 
         self.setObjectName("setupPage")
 
-        title = QLabel("Create USB Vault")
+        eyebrow = QLabel("NEW VAULT")
+        eyebrow.setObjectName("setupEyebrow")
+
+        title = QLabel("Create a vault")
         title.setObjectName("setupTitle")
 
         subtitle = QLabel("Choose separate locations for the encrypted vault and USB keyfile.")
+        subtitle.setObjectName("pageSubtitle")
         subtitle.setWordWrap(True)
 
         self.vault_path_edit = QLineEdit()
@@ -64,10 +71,12 @@ class SetupPage(QWidget):
 
         vault_browse_button = QPushButton("Browse…")
         vault_browse_button.setObjectName("browseNewVaultButton")
+        vault_browse_button.setIcon(app_icon("folder"))
         vault_browse_button.clicked.connect(self._browse_vault)
 
         keyfile_browse_button = QPushButton("Browse…")
         keyfile_browse_button.setObjectName("browseNewKeyfileButton")
+        keyfile_browse_button.setIcon(app_icon("key"))
         keyfile_browse_button.clicked.connect(self._browse_keyfile)
 
         vault_row = QHBoxLayout()
@@ -107,27 +116,40 @@ class SetupPage(QWidget):
 
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("cancelSetupButton")
+        self.cancel_button.setIcon(app_icon("back"))
         self.cancel_button.clicked.connect(self._cancel)
 
-        self.create_button = QPushButton("Create Vault")
+        self.create_button = QPushButton("Create vault")
         self.create_button.setObjectName("createVaultButton")
+        self.create_button.setIcon(app_icon("plus", "#09201f"))
         self.create_button.setDefault(True)
         self.create_button.clicked.connect(self._emit_setup)
         self.confirmation_edit.returnPressed.connect(self._emit_setup)
 
         buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
         buttons.addWidget(self.cancel_button)
         buttons.addStretch()
         buttons.addWidget(self.create_button)
 
+        surface = QFrame()
+        surface.setObjectName("formSurface")
+        surface_layout = QVBoxLayout(surface)
+        surface_layout.setContentsMargins(24, 22, 24, 22)
+        surface_layout.setSpacing(12)
+        surface_layout.addLayout(form)
+        surface_layout.addWidget(self.error_label)
+        surface_layout.addLayout(buttons)
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(34, 30, 34, 28)
+        layout.setSpacing(8)
         layout.addStretch()
+        layout.addWidget(eyebrow)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(12)
-        layout.addLayout(form)
-        layout.addWidget(self.error_label)
-        layout.addLayout(buttons)
+        layout.addWidget(surface)
         layout.addStretch()
 
     def show_error(

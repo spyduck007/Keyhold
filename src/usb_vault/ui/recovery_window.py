@@ -8,6 +8,7 @@ from PySide6.QtGui import QAction
 
 from usb_vault.core.errors import VaultError
 from usb_vault.ui.backend import VaultBackend
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.main_window import (
     RecoveryPresenter,
 )
@@ -63,6 +64,7 @@ class RecoveryMainWindow(MonitoredMainWindow):
             self,
         )
         self.recover_access_action.setObjectName("recoverAccessAction")
+        self.recover_access_action.setIcon(app_icon("shield"))
         self.recover_access_action.triggered.connect(self.show_recovery_page)
 
         recovery_menu = self.menuBar().addMenu("&Recovery")
@@ -102,6 +104,8 @@ class RecoveryMainWindow(MonitoredMainWindow):
         recovery_code: str,
         replace_existing_keys: bool,
     ) -> None:
+        self._usb_ejector.record_keyfile_path(Path(new_keyfile_path))
+
         try:
             recovered = self._vault_recovery_backend.recover_vault(
                 vault_path=Path(vault_path),
