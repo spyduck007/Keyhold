@@ -1,16 +1,27 @@
-"""Unlock a serialized vault using a password and USB keyfile."""
+"""Unlock serialized vaults and validate decrypted state."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from usb_vault.core.crypto.encryption import unwrap_master_key
+from usb_vault.core.crypto.encryption import (
+    unwrap_master_key,
+)
 from usb_vault.core.crypto.key_derivation import (
     derive_key_encryption_key,
 )
-from usb_vault.core.crypto.password_kdf import derive_password_key
-from usb_vault.core.crypto.payload_encryption import decrypt_payload
-from usb_vault.core.errors import UnlockError
+from usb_vault.core.crypto.password_kdf import (
+    derive_password_key,
+)
+from usb_vault.core.crypto.payload_encryption import (
+    decrypt_payload,
+)
+from usb_vault.core.errors import (
+    UnlockError,
+)
+from usb_vault.core.storage.container import (
+    VaultContainer,
+)
 from usb_vault.core.storage.reader import (
     read_usb_keyfile,
     read_vault_container,
@@ -19,7 +30,9 @@ from usb_vault.core.vault.manifest import (
     VaultManifest,
     manifest_associated_data,
 )
-from usb_vault.core.vault.session import VaultSession
+from usb_vault.core.vault.session import (
+    VaultSession,
+)
 
 
 def unlock_vault(
@@ -28,7 +41,7 @@ def unlock_vault(
     keyfile_path: str | Path,
     password: str | bytes | bytearray | memoryview,
 ) -> VaultSession:
-    """Unlock a vault or raise one generic authentication error."""
+    """Unlock a vault with a password and USB keyfile."""
     keyfile = read_usb_keyfile(keyfile_path)
     container = read_vault_container(vault_path)
 
@@ -50,6 +63,27 @@ def unlock_vault(
         slot.wrapped_master_key,
         key_encryption_key,
     )
+
+    return open_vault_session(
+        vault_path=vault_path,
+        container=container,
+        master_key=master_key,
+    )
+
+
+def open_vault_session(
+    *,
+    vault_path: str | Path,
+    container: VaultContainer,
+    master_key: bytes,
+) -> VaultSession:
+    """Validate decrypted metadata and build an unlocked session."""
+    if not isinstance(
+        container,
+        VaultContainer,
+    ):
+        raise TypeError("container must be VaultContainer")
+
     manifest_bytes = decrypt_payload(
         container.encrypted_manifest,
         master_key,

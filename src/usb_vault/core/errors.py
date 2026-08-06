@@ -44,3 +44,7 @@ class CurrentKeyRevocationError(VaultOperationError):
 
 class KeyfileSetError(VaultOperationError):
     """Raised when password rotation lacks the exact registered key set."""
+
+
+class RecoveryAlreadyConfiguredError(VaultOperationError):
+    """Raised when creating recovery without explicitly replacing it."""

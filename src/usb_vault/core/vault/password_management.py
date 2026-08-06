@@ -1,4 +1,4 @@
-"""Secure password rotation for every registered USB key slot."""
+"""Secure password rotation for every registered unlock method."""
 
 from __future__ import annotations
 
@@ -7,11 +7,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from usb_vault.core.crypto.encryption import wrap_master_key
+from usb_vault.core.crypto.encryption import (
+    wrap_master_key,
+)
 from usb_vault.core.crypto.key_derivation import (
     derive_key_encryption_key,
 )
-from usb_vault.core.crypto.password_kdf import derive_password_key
+from usb_vault.core.crypto.password_kdf import (
+    derive_password_key,
+)
 from usb_vault.core.crypto.random import (
     generate_argon2_salt,
 )
@@ -19,18 +23,35 @@ from usb_vault.core.errors import (
     KeyfileSetError,
     VaultOperationError,
 )
-from usb_vault.core.keys.keyfile import UsbKeyfile
-from usb_vault.core.storage.container import VaultContainer
+from usb_vault.core.keys.keyfile import (
+    UsbKeyfile,
+)
+from usb_vault.core.keys.recovery import (
+    derive_recovery_key_encryption_key,
+    parse_recovery_code,
+)
+from usb_vault.core.storage.container import (
+    VaultContainer,
+)
 from usb_vault.core.storage.format import (
+    VAULT_FORMAT_VERSION,
     PasswordUsbKeySlot,
+    RecoveryKeySlot,
     VaultHeader,
 )
 from usb_vault.core.storage.reader import (
     read_usb_keyfile,
     read_vault_container,
 )
-from usb_vault.core.storage.writer import write_vault_container
-from usb_vault.core.vault.unlocker import unlock_vault
+from usb_vault.core.storage.writer import (
+    write_vault_container,
+)
+from usb_vault.core.vault.recovery import (
+    unlock_vault_with_recovery,
+)
+from usb_vault.core.vault.unlocker import (
+    unlock_vault,
+)
 
 PasswordInput = str | bytes | bytearray | memoryview
 
@@ -41,6 +62,7 @@ class PasswordChangeResult:
 
     vault_id: bytes
     key_count: int
+    recovery_updated: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(
@@ -55,6 +77,9 @@ class PasswordChangeResult:
         if self.key_count <= 0:
             raise ValueError("key_count must be greater than zero")
 
+        if type(self.recovery_updated) is not bool:
+            raise TypeError("recovery_updated must be a boolean")
+
 
 def change_vault_password(
     *,
@@ -63,8 +88,9 @@ def change_vault_password(
     current_password: PasswordInput,
     new_password: PasswordInput,
     additional_keyfile_paths: Sequence[str | Path] = (),
+    recovery_code: str | None = None,
 ) -> PasswordChangeResult:
-    """Re-wrap the master key for every USB using a new password."""
+    """Re-wrap the master key for every unlock method."""
     current_path = Path(current_keyfile_path)
 
     with unlock_vault(
@@ -108,6 +134,31 @@ def change_vault_password(
         if supplied_key_ids != registered_key_ids:
             raise KeyfileSetError("Provide exactly one keyfile for every registered USB key.")
 
+        recovery_credential = None
+
+        if session.header.recovery_slots:
+            if len(session.header.recovery_slots) != 1:
+                raise KeyfileSetError(
+                    "Password rotation currently supports exactly one recovery slot."
+                )
+
+            if recovery_code is None:
+                raise KeyfileSetError(
+                    "Provide the current recovery code to change the vault password."
+                )
+
+            with unlock_vault_with_recovery(
+                vault_path=vault_path,
+                password=current_password,
+                recovery_code=recovery_code,
+            ) as recovery_verification:
+                if recovery_verification.header.vault_id != session.header.vault_id:
+                    raise RuntimeError("recovery verification opened the wrong vault")
+
+            recovery_credential = parse_recovery_code(recovery_code)
+        elif recovery_code is not None:
+            raise KeyfileSetError("This vault does not have a recovery code.")
+
         new_argon2_salt = generate_argon2_salt()
         new_password_key = derive_password_key(
             new_password,
@@ -140,18 +191,42 @@ def change_vault_password(
                 )
             )
 
+        updated_recovery_slots: tuple[
+            RecoveryKeySlot,
+            ...,
+        ] = ()
+
+        if recovery_credential is not None:
+            recovery_key = derive_recovery_key_encryption_key(
+                new_password_key,
+                recovery_credential,
+                vault_id=(session.header.vault_id),
+            )
+            updated_recovery_slots = (
+                RecoveryKeySlot(
+                    recovery_id=(recovery_credential.recovery_id),
+                    wrapped_master_key=(
+                        wrap_master_key(
+                            master_key,
+                            recovery_key,
+                        )
+                    ),
+                ),
+            )
+
         updated_header = VaultHeader(
             vault_id=(session.header.vault_id),
-            argon2_salt=(new_argon2_salt),
+            argon2_salt=new_argon2_salt,
             argon2_parameters=(session.header.argon2_parameters),
             key_slots=tuple(updated_slots),
-            version=(session.header.version),
+            recovery_slots=(updated_recovery_slots),
+            version=(VAULT_FORMAT_VERSION if updated_recovery_slots else session.header.version),
             vault_cipher=(session.header.vault_cipher),
         )
         updated_container = VaultContainer(
             header=updated_header,
             encrypted_manifest=(original_container.encrypted_manifest),
-            blobs=(original_container.blobs),
+            blobs=original_container.blobs,
         )
 
         vault_updated = False
@@ -171,15 +246,24 @@ def change_vault_password(
                 ) = keyfiles_by_id[updated_slot.key_id]
 
                 with unlock_vault(
-                    vault_path=(vault_path),
+                    vault_path=vault_path,
                     keyfile_path=(verification_path),
-                    password=(new_password),
+                    password=new_password,
                 ) as verification:
                     if verification.header.vault_id != session.header.vault_id:
                         raise RuntimeError("password-change verification opened the wrong vault")
 
                     if verification.header.find_password_usb_slot(updated_slot.key_id) is None:
                         raise RuntimeError("password-change verification could not find a key slot")
+
+            if recovery_code is not None:
+                with unlock_vault_with_recovery(
+                    vault_path=vault_path,
+                    password=new_password,
+                    recovery_code=(recovery_code),
+                ) as recovery_verification:
+                    if recovery_verification.header.vault_id != session.header.vault_id:
+                        raise RuntimeError("updated recovery code opened the wrong vault")
         except Exception:
             if vault_updated:
                 write_vault_container(
@@ -193,16 +277,25 @@ def change_vault_password(
         return PasswordChangeResult(
             vault_id=(updated_header.vault_id),
             key_count=len(updated_header.key_slots),
+            recovery_updated=(recovery_credential is not None),
         )
 
 
 def _load_unique_keyfiles(
     paths: Sequence[Path],
 ) -> tuple[
-    tuple[Path, UsbKeyfile],
+    tuple[
+        Path,
+        UsbKeyfile,
+    ],
     ...,
 ]:
-    loaded: list[tuple[Path, UsbKeyfile]] = []
+    loaded: list[
+        tuple[
+            Path,
+            UsbKeyfile,
+        ]
+    ] = []
     seen_key_ids: set[bytes] = set()
 
     for path in paths:

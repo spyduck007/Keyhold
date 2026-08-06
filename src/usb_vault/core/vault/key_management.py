@@ -336,6 +336,7 @@ def _copy_header_with_slots(
         argon2_salt=header.argon2_salt,
         argon2_parameters=(header.argon2_parameters),
         key_slots=key_slots,
+        recovery_slots=(header.recovery_slots),
         version=header.version,
         vault_cipher=header.vault_cipher,
     )

@@ -7,19 +7,48 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from usb_vault.cli.commands.add import run_add_command
-from usb_vault.cli.commands.add_key import run_add_key_command
+from usb_vault.cli.commands.add import (
+    run_add_command,
+)
+from usb_vault.cli.commands.add_key import (
+    run_add_key_command,
+)
 from usb_vault.cli.commands.change_password import (
     run_change_password_command,
 )
-from usb_vault.cli.commands.create import run_create_command
-from usb_vault.cli.commands.delete import run_delete_command
-from usb_vault.cli.commands.extract import run_extract_command
-from usb_vault.cli.commands.list_files import run_list_command
-from usb_vault.cli.commands.list_keys import run_list_keys_command
-from usb_vault.cli.commands.revoke_key import run_revoke_key_command
-from usb_vault.cli.commands.unlock import run_unlock_command
-from usb_vault.core.errors import VaultError
+from usb_vault.cli.commands.create import (
+    run_create_command,
+)
+from usb_vault.cli.commands.create_recovery import (
+    run_create_recovery_command,
+)
+from usb_vault.cli.commands.delete import (
+    run_delete_command,
+)
+from usb_vault.cli.commands.extract import (
+    run_extract_command,
+)
+from usb_vault.cli.commands.list_files import (
+    run_list_command,
+)
+from usb_vault.cli.commands.list_keys import (
+    run_list_keys_command,
+)
+from usb_vault.cli.commands.recover_usb import (
+    run_recover_usb_command,
+)
+from usb_vault.cli.commands.recovery_unlock import (
+    run_recovery_unlock_command,
+)
+from usb_vault.cli.commands.revoke_key import (
+    run_revoke_key_command,
+)
+from usb_vault.cli.commands.unlock import (
+    run_unlock_command,
+)
+from usb_vault.core.errors import (
+    VaultError,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -140,7 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     change_password_parser = subparsers.add_parser(
         "change-password",
-        help=("Change the password for every registered USB key."),
+        help=("Change the password for every registered unlock method."),
     )
     _add_vault_and_keyfile_arguments(change_password_parser)
     change_password_parser.add_argument(
@@ -153,18 +182,76 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    recovery_create_parser = subparsers.add_parser(
+        "recovery-create",
+        help=("Create the vault's offline recovery code."),
+    )
+    _add_vault_and_keyfile_arguments(recovery_create_parser)
+
+    recovery_rotate_parser = subparsers.add_parser(
+        "recovery-rotate",
+        help=("Replace the existing recovery code."),
+    )
+    _add_vault_and_keyfile_arguments(recovery_rotate_parser)
+
+    recovery_unlock_parser = subparsers.add_parser(
+        "recovery-unlock",
+        help=("Verify password-plus-recovery access without a USB."),
+    )
+    recovery_unlock_parser.add_argument(
+        "--vault",
+        type=Path,
+        required=True,
+        help=("Path to the .vault file."),
+    )
+
+    recover_usb_parser = subparsers.add_parser(
+        "recover-usb",
+        help=("Create a replacement USB using the password and recovery code."),
+    )
+    recover_usb_parser.add_argument(
+        "--vault",
+        type=Path,
+        required=True,
+        help=("Path to the .vault file."),
+    )
+    recover_usb_parser.add_argument(
+        "--new-keyfile",
+        type=Path,
+        required=True,
+        help=("Path for the recovered USB keyfile."),
+    )
+    recover_usb_parser.add_argument(
+        "--replace-existing-keys",
+        action="store_true",
+        help=("Revoke every previous USB key slot."),
+    )
+
     return parser
 
 
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Run the selected command and return a process exit code."""
+    """Run the selected command and return an exit code."""
     parser = build_parser()
     arguments = parser.parse_args(argv)
 
     try:
         vault_path = Path(arguments.vault)
+
+        if arguments.command == "recovery-unlock":
+            return run_recovery_unlock_command(
+                vault_path=vault_path,
+            )
+
+        if arguments.command == "recover-usb":
+            return run_recover_usb_command(
+                vault_path=vault_path,
+                new_keyfile_path=Path(arguments.new_keyfile),
+                replace_existing_keys=(arguments.replace_existing_keys),
+            )
+
         keyfile_path = Path(arguments.keyfile)
 
         if arguments.command == "create":
@@ -184,7 +271,7 @@ def main(
                 vault_path=vault_path,
                 keyfile_path=keyfile_path,
                 source_path=Path(arguments.source),
-                stored_name=arguments.name,
+                stored_name=(arguments.name),
             )
 
         if arguments.command == "list":
@@ -197,7 +284,7 @@ def main(
             return run_extract_command(
                 vault_path=vault_path,
                 keyfile_path=keyfile_path,
-                stored_name=arguments.name,
+                stored_name=(arguments.name),
                 output_path=Path(arguments.output),
                 overwrite=(arguments.overwrite),
             )
@@ -206,7 +293,7 @@ def main(
             return run_delete_command(
                 vault_path=vault_path,
                 keyfile_path=keyfile_path,
-                stored_name=arguments.name,
+                stored_name=(arguments.name),
             )
 
         if arguments.command == "add-key":
@@ -227,14 +314,28 @@ def main(
                 vault_path=vault_path,
                 keyfile_path=keyfile_path,
                 key_id_hex=(arguments.key_id),
-                confirmed=arguments.yes,
+                confirmed=(arguments.yes),
             )
 
         if arguments.command == "change-password":
             return run_change_password_command(
                 vault_path=vault_path,
                 keyfile_path=(keyfile_path),
-                additional_keyfile_paths=tuple(arguments.other_keyfile),
+                additional_keyfile_paths=(tuple(arguments.other_keyfile)),
+            )
+
+        if arguments.command == "recovery-create":
+            return run_create_recovery_command(
+                vault_path=vault_path,
+                keyfile_path=(keyfile_path),
+                replace=False,
+            )
+
+        if arguments.command == "recovery-rotate":
+            return run_create_recovery_command(
+                vault_path=vault_path,
+                keyfile_path=(keyfile_path),
+                replace=True,
             )
 
         parser.error("unsupported command")
