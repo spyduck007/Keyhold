@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import (
+    Sequence,
+)
 
 from PySide6.QtWidgets import (
     QApplication,
 )
 
+from usb_vault.ui.auto_detect_window import (
+    AutoDetectUsbMainWindow,
+)
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
     DEFAULT_USB_POLL_INTERVAL_MS,
@@ -17,9 +22,6 @@ from usb_vault.ui.session_guard import (
 from usb_vault.ui.usb_grace import (
     DEFAULT_USB_RECONNECT_GRACE_MS,
     UsbGraceSessionGuard,
-)
-from usb_vault.ui.usb_grace_window import (
-    UsbGraceMainWindow,
 )
 
 USB_POLL_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_POLL_SECONDS"
@@ -30,7 +32,7 @@ USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the responsive USB-monitored desktop application."""
+    """Launch the USB-auto-detecting desktop application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
@@ -61,7 +63,7 @@ def main(
         ),
     )
 
-    window = UsbGraceMainWindow(session_guard=session_guard)
+    window = AutoDetectUsbMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()

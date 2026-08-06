@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import (
+    Signal,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -17,7 +19,7 @@ from PySide6.QtWidgets import (
 
 
 class UnlockPage(QWidget):
-    """Collect a vault, USB keyfile, and password."""
+    """Collect a vault, optional USB keyfile, and password."""
 
     unlock_requested = Signal(
         str,
@@ -36,7 +38,13 @@ class UnlockPage(QWidget):
         title = QLabel("Unlock USB Vault")
         title.setObjectName("unlockTitle")
 
-        subtitle = QLabel("Choose the encrypted vault and the keyfile stored on your USB.")
+        subtitle = QLabel(
+            "Choose the encrypted vault, "
+            "insert a registered USB key, "
+            "and enter the password. "
+            "The keyfile will be detected "
+            "automatically."
+        )
         subtitle.setWordWrap(True)
 
         self.vault_path_edit = QLineEdit()
@@ -45,7 +53,8 @@ class UnlockPage(QWidget):
 
         self.keyfile_path_edit = QLineEdit()
         self.keyfile_path_edit.setObjectName("keyfilePathEdit")
-        self.keyfile_path_edit.setPlaceholderText("Select the USB .authkey file")
+        self.keyfile_path_edit.setPlaceholderText("Optional manual keyfile path")
+        self.keyfile_path_edit.setToolTip("Leave blank to scan mounted USB drives automatically.")
 
         self.password_edit = QLineEdit()
         self.password_edit.setObjectName("passwordEdit")
@@ -60,7 +69,7 @@ class UnlockPage(QWidget):
         vault_browse_button.setObjectName("browseVaultButton")
         vault_browse_button.clicked.connect(self._browse_vault)
 
-        keyfile_browse_button = QPushButton("Browse…")
+        keyfile_browse_button = QPushButton("Browse manually…")
         keyfile_browse_button.setObjectName("browseKeyfileButton")
         keyfile_browse_button.clicked.connect(self._browse_keyfile)
 
@@ -78,7 +87,7 @@ class UnlockPage(QWidget):
             vault_row,
         )
         form.addRow(
-            "USB keyfile:",
+            "USB keyfile (optional):",
             keyfile_row,
         )
         form.addRow(
@@ -142,10 +151,6 @@ class UnlockPage(QWidget):
 
         if not vault_path:
             self.show_error("Choose a vault file.")
-            return
-
-        if not keyfile_path:
-            self.show_error("Choose a USB keyfile.")
             return
 
         if not password:

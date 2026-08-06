@@ -1,12 +1,18 @@
 """Tests for the desktop unlock page."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtTest import QTest
+from PySide6.QtCore import (
+    Qt,
+)
+from PySide6.QtTest import (
+    QTest,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QLineEdit,
 )
-from pytestqt.qtbot import QtBot
+from pytestqt.qtbot import (
+    QtBot,
+)
 
 from usb_vault.ui.pages.unlock_page import (
     UnlockPage,
@@ -47,6 +53,32 @@ def test_unlock_page_emits_complete_credentials(
     ]
 
 
+def test_unlock_page_allows_automatic_key_detection(
+    qtbot: QtBot,
+) -> None:
+    page = UnlockPage()
+    qtbot.addWidget(page)
+    _show_page(page)
+
+    page.vault_path_edit.setText("/tmp/Private.vault")
+    page.password_edit.setText("test password")
+
+    with qtbot.waitSignal(
+        page.unlock_requested,
+        timeout=1_000,
+    ) as signal:
+        QTest.mouseClick(
+            page.unlock_button,
+            Qt.MouseButton.LeftButton,
+        )
+
+    assert signal.args == [
+        "/tmp/Private.vault",
+        "",
+        "test password",
+    ]
+
+
 def test_unlock_page_requires_vault_path(
     qtbot: QtBot,
 ) -> None:
@@ -54,7 +86,6 @@ def test_unlock_page_requires_vault_path(
     qtbot.addWidget(page)
     _show_page(page)
 
-    page.keyfile_path_edit.setText("/Volumes/USB/.authkey")
     page.password_edit.setText("test password")
 
     QTest.mouseClick(
@@ -64,6 +95,24 @@ def test_unlock_page_requires_vault_path(
 
     assert page.error_label.isVisible()
     assert page.error_label.text() == "Choose a vault file."
+
+
+def test_unlock_page_requires_password(
+    qtbot: QtBot,
+) -> None:
+    page = UnlockPage()
+    qtbot.addWidget(page)
+    _show_page(page)
+
+    page.vault_path_edit.setText("/tmp/Private.vault")
+
+    QTest.mouseClick(
+        page.unlock_button,
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert page.error_label.isVisible()
+    assert page.error_label.text() == "Enter the vault password."
 
 
 def test_show_password_checkbox_changes_echo_mode(
@@ -96,4 +145,4 @@ def test_reset_after_lock_clears_password_and_error(
     page.reset_after_lock()
 
     assert page.password_edit.text() == ""
-    assert not page.error_label.isVisible()
+    assert not (page.error_label.isVisible())
