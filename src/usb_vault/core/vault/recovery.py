@@ -301,6 +301,11 @@ def recover_usb_key(
             ),
         )
 
+        updated_usb_slots: tuple[
+            PasswordUsbKeySlot,
+            ...,
+        ]
+
         if replace_existing_keys:
             updated_usb_slots = (new_usb_slot,)
         else:

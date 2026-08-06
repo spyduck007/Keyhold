@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "argon2-cffi>=25.1.0",
     "cryptography>=46.0.0",
+    "PySide6>=6.8,<7",
 ]
 
 [project.optional-dependencies]
@@ -18,11 +19,13 @@ dev = [
     "mypy>=1.18.0",
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
+    "pytest-qt>=4.5,<5",
     "ruff>=0.12.0",
 ]
 
 [project.scripts]
 usb-vault = "usb_vault.cli.main:main"
+usb-vault-gui = "usb_vault.ui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -32,6 +35,7 @@ minversion = "8.0"
 addopts = ["-ra", "--strict-config", "--strict-markers"]
 testpaths = ["tests"]
 pythonpath = ["src"]
+qt_api = "pyside6"
 
 [tool.coverage.run]
 branch = true
