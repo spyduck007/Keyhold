@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from usb_vault.ui.async_window import (
-    AsyncSecurityMainWindow,
+from usb_vault.ui.fully_async_window import (
+    FullyAsyncSecurityMainWindow,
 )
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
@@ -26,7 +26,7 @@ IDLE_TIMEOUT_ENVIRONMENT_VARIABLE = "USB_VAULT_IDLE_TIMEOUT_SECONDS"
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the responsive monitored desktop application."""
+    """Launch the fully responsive monitored desktop application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
@@ -51,7 +51,7 @@ def main(
         ),
     )
 
-    window = AsyncSecurityMainWindow(session_guard=session_guard)
+    window = FullyAsyncSecurityMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()
