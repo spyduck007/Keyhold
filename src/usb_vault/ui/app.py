@@ -12,9 +12,6 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from usb_vault.ui.auto_detect_window import (
-    AutoDetectUsbMainWindow,
-)
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
     DEFAULT_USB_POLL_INTERVAL_MS,
@@ -22,6 +19,9 @@ from usb_vault.ui.session_guard import (
 from usb_vault.ui.usb_grace import (
     DEFAULT_USB_RECONNECT_GRACE_MS,
     UsbGraceSessionGuard,
+)
+from usb_vault.ui.vault_library_window import (
+    VaultLibraryMainWindow,
 )
 
 USB_POLL_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_POLL_SECONDS"
@@ -32,7 +32,7 @@ USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the USB-auto-detecting desktop application."""
+    """Launch the USB-auto-detecting library application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
@@ -63,7 +63,7 @@ def main(
         ),
     )
 
-    window = AutoDetectUsbMainWindow(session_guard=session_guard)
+    window = VaultLibraryMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()
