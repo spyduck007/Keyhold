@@ -20,8 +20,8 @@ from usb_vault.ui.usb_grace import (
     DEFAULT_USB_RECONNECT_GRACE_MS,
     UsbGraceSessionGuard,
 )
-from usb_vault.ui.vault_library_window import (
-    VaultLibraryMainWindow,
+from usb_vault.ui.vault_cards_window import (
+    VaultCardsMainWindow,
 )
 
 USB_POLL_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_POLL_SECONDS"
@@ -32,7 +32,7 @@ USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the USB-auto-detecting library application."""
+    """Launch the card-based USB Vault application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
@@ -63,7 +63,7 @@ def main(
         ),
     )
 
-    window = VaultLibraryMainWindow(session_guard=session_guard)
+    window = VaultCardsMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()
