@@ -139,6 +139,7 @@ class MainWindow(QMainWindow):
             self.lock_vault()
 
         self.setup_page.reset()
+        self.setup_page.refresh_usb_volumes()
         self._pages.setCurrentWidget(self.setup_page)
         self.statusBar().showMessage(
             "Create a new encrypted vault.",

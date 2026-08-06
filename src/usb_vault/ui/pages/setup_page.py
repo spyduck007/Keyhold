@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -16,7 +19,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.platform.macos.usb_volumes import (
+    MacOsUsbVolumeLocator,
+    UsbVolumeLocator,
+)
 from usb_vault.ui.icons import app_icon
+
+DEFAULT_USB_KEYFILE_NAME = ".authkey"
 
 
 class SetupPage(QWidget):
@@ -32,8 +41,14 @@ class SetupPage(QWidget):
     def __init__(
         self,
         parent: QWidget | None = None,
+        *,
+        usb_volume_locator: UsbVolumeLocator | None = None,
     ) -> None:
         super().__init__(parent)
+
+        self._usb_volume_locator = (
+            usb_volume_locator if usb_volume_locator is not None else MacOsUsbVolumeLocator()
+        )
 
         self.setObjectName("setupPage")
 
@@ -43,7 +58,10 @@ class SetupPage(QWidget):
         title = QLabel("Create a vault")
         title.setObjectName("setupTitle")
 
-        subtitle = QLabel("Choose separate locations for the encrypted vault and USB keyfile.")
+        subtitle = QLabel(
+            "Choose a location for the encrypted vault, then select the USB that will hold "
+            "its hardware key."
+        )
         subtitle.setObjectName("pageSubtitle")
         subtitle.setWordWrap(True)
 
@@ -53,7 +71,13 @@ class SetupPage(QWidget):
 
         self.keyfile_path_edit = QLineEdit()
         self.keyfile_path_edit.setObjectName("newKeyfilePathEdit")
-        self.keyfile_path_edit.setPlaceholderText("Choose a location on the USB")
+        self.keyfile_path_edit.setReadOnly(True)
+        self.keyfile_path_edit.setPlaceholderText("Select an external USB to create .authkey")
+
+        self.usb_volume_combo = QComboBox()
+        self.usb_volume_combo.setObjectName("usbVolumeComboBox")
+        self.usb_volume_combo.setPlaceholderText("Select an external USB")
+        self.usb_volume_combo.currentIndexChanged.connect(self._update_keyfile_path)
 
         self.password_edit = QLineEdit()
         self.password_edit.setObjectName("newPasswordEdit")
@@ -74,18 +98,18 @@ class SetupPage(QWidget):
         vault_browse_button.setIcon(app_icon("folder"))
         vault_browse_button.clicked.connect(self._browse_vault)
 
-        keyfile_browse_button = QPushButton("Browse…")
-        keyfile_browse_button.setObjectName("browseNewKeyfileButton")
-        keyfile_browse_button.setIcon(app_icon("key"))
-        keyfile_browse_button.clicked.connect(self._browse_keyfile)
+        refresh_usb_volumes_button = QPushButton("Refresh")
+        refresh_usb_volumes_button.setObjectName("refreshUsbVolumesButton")
+        refresh_usb_volumes_button.setIcon(app_icon("refresh"))
+        refresh_usb_volumes_button.clicked.connect(self.refresh_usb_volumes)
 
         vault_row = QHBoxLayout()
         vault_row.addWidget(self.vault_path_edit)
         vault_row.addWidget(vault_browse_button)
 
         keyfile_row = QHBoxLayout()
-        keyfile_row.addWidget(self.keyfile_path_edit)
-        keyfile_row.addWidget(keyfile_browse_button)
+        keyfile_row.addWidget(self.usb_volume_combo)
+        keyfile_row.addWidget(refresh_usb_volumes_button)
 
         form = QFormLayout()
         form.addRow(
@@ -93,8 +117,12 @@ class SetupPage(QWidget):
             vault_row,
         )
         form.addRow(
-            "USB keyfile:",
+            "USB key:",
             keyfile_row,
+        )
+        form.addRow(
+            "Keyfile:",
+            self.keyfile_path_edit,
         )
         form.addRow(
             "Password:",
@@ -152,6 +180,8 @@ class SetupPage(QWidget):
         layout.addWidget(surface)
         layout.addStretch()
 
+        self.refresh_usb_volumes()
+
     def show_error(
         self,
         message: str,
@@ -174,7 +204,8 @@ class SetupPage(QWidget):
     def reset(self) -> None:
         """Reset the complete setup form."""
         self.vault_path_edit.clear()
-        self.keyfile_path_edit.clear()
+        self.usb_volume_combo.setCurrentIndex(-1)
+        self._update_keyfile_path()
         self.clear_sensitive_fields()
         self.clear_error()
         self.vault_path_edit.setFocus()
@@ -190,7 +221,7 @@ class SetupPage(QWidget):
             return
 
         if not keyfile_path:
-            self.show_error("Choose a location for the USB keyfile.")
+            self.show_error("Select an external USB for the hardware key.")
             return
 
         if not password:
@@ -223,16 +254,53 @@ class SetupPage(QWidget):
         if selected_path:
             self.vault_path_edit.setText(selected_path)
 
-    def _browse_keyfile(self) -> None:
-        selected_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Create USB keyfile",
-            "",
-            ("USB Vault keyfiles (*.authkey);;All files (*)"),
-        )
+    def refresh_usb_volumes(self) -> None:
+        """Reload mounted external USBs and preserve the current choice when possible."""
+        selected_path = self._selected_usb_volume_path()
 
-        if selected_path:
-            self.keyfile_path_edit.setText(selected_path)
+        try:
+            volume_paths = self._usb_volume_locator.external_usb_volumes()
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+        ):
+            volume_paths = ()
+
+        self.usb_volume_combo.blockSignals(True)
+        self.usb_volume_combo.clear()
+        self.usb_volume_combo.addItem("Select an external USB", None)
+
+        for volume_path in volume_paths:
+            self.usb_volume_combo.addItem(
+                volume_path.name,
+                str(volume_path),
+            )
+
+        if selected_path is not None:
+            selected_index = self.usb_volume_combo.findData(str(selected_path))
+            self.usb_volume_combo.setCurrentIndex(
+                selected_index if selected_index >= 0 else 0
+            )
+        else:
+            self.usb_volume_combo.setCurrentIndex(0)
+
+        self.usb_volume_combo.setEnabled(bool(volume_paths))
+        self.usb_volume_combo.blockSignals(False)
+        self._update_keyfile_path()
+
+    def _selected_usb_volume_path(self) -> Path | None:
+        selected_path = self.usb_volume_combo.currentData()
+        return Path(selected_path) if isinstance(selected_path, str) else None
+
+    def _update_keyfile_path(self) -> None:
+        selected_path = self._selected_usb_volume_path()
+        keyfile_path = (
+            selected_path / DEFAULT_USB_KEYFILE_NAME
+            if selected_path is not None
+            else None
+        )
+        self.keyfile_path_edit.setText(str(keyfile_path) if keyfile_path is not None else "")
 
     def _set_passwords_visible(
         self,
