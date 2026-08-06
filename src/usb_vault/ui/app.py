@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 
-from usb_vault.ui.recovery_window import (
-    RecoveryMainWindow,
+from usb_vault.ui.security_window import (
+    SecurityMainWindow,
 )
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
@@ -51,7 +51,7 @@ def main(
         ),
     )
 
-    window = RecoveryMainWindow(session_guard=session_guard)
+    window = SecurityMainWindow(session_guard=session_guard)
     window.show()
 
     return application.exec()
