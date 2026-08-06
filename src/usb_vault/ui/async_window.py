@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import (
-    Callable,
     Sequence,
 )
 from pathlib import Path
@@ -98,7 +97,7 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
             0,
         )
         self._activity_indicator.setTextVisible(False)
-        self._activity_indicator.setMaximumWidth(120)
+        self._activity_indicator.setFixedWidth(180)
         self._activity_indicator.hide()
 
         self.statusBar().addPermanentWidget(self._activity_indicator)
@@ -426,7 +425,7 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
         active_vault: UnlockedVault,
     ) -> None:
         if self._is_current_vault(active_vault):
-            self._show_status_error(("Background operation returned an invalid result."))
+            self._show_status_error("Background operation returned an invalid result.")
 
     def _show_busy_message(self) -> None:
         self.statusBar().showMessage(
@@ -443,7 +442,7 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
 
         self.new_vault_action.setEnabled(not busy)
         self.recover_access_action.setEnabled(not busy)
-        self.security_action.setEnabled((not busy and self.is_unlocked))
+        self.security_action.setEnabled(not busy and self.is_unlocked)
 
         # Manual locking remains available from the File menu.
         self.lock_action.setEnabled(self.is_unlocked)

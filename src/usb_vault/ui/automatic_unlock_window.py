@@ -172,6 +172,7 @@ class AutomaticUnlockMainWindow(VaultCardsMainWindow):
     ) -> None:
         """Unlock manually or begin waiting for a mounted USB key."""
         if keyfile_path:
+            self._usb_ejector.record_keyfile_path(Path(keyfile_path))
             self._cancel_pending_usb_unlock(reset_page=True)
             super()._on_unlock_requested(
                 vault_path,
@@ -206,14 +207,13 @@ class AutomaticUnlockMainWindow(VaultCardsMainWindow):
             password=(password_secret),
         )
 
-        self.statusBar().showMessage(
-            (
-                "Waiting for a registered "
-                "USB key. Insert it now; "
-                "the vault will unlock "
-                "automatically."
-            )
+        waiting_message = (
+            "Waiting for a registered "
+            "USB key. Insert it now; "
+            "the vault will unlock "
+            "automatically."
         )
+        self.statusBar().showMessage(waiting_message)
 
         self._unlock_waiter.start(selected_vault_path)
 
@@ -225,7 +225,7 @@ class AutomaticUnlockMainWindow(VaultCardsMainWindow):
             value,
             Path,
         ):
-            self._on_waiting_scan_failed(("USB key detection returned an invalid result."))
+            self._on_waiting_scan_failed("USB key detection returned an invalid result.")
             return
 
         pending = self._pending_usb_unlock
@@ -238,6 +238,7 @@ class AutomaticUnlockMainWindow(VaultCardsMainWindow):
         self.unlock_page.begin_unlocking()
 
         try:
+            self._usb_ejector.record_keyfile_path(value)
             password = pending.password.text()
 
             super()._on_unlock_requested(

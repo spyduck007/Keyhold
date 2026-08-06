@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -15,6 +16,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from usb_vault.ui.icons import app_icon
 
 
 class RecoveryPage(QWidget):
@@ -37,12 +40,16 @@ class RecoveryPage(QWidget):
 
         self.setObjectName("recoveryPage")
 
-        title = QLabel("Recover USB Access")
+        eyebrow = QLabel("RECOVERY")
+        eyebrow.setObjectName("recoveryEyebrow")
+
+        title = QLabel("Restore USB access")
         title.setObjectName("recoveryPageTitle")
 
         subtitle = QLabel(
             "Use the vault password and offline recovery code to create a replacement USB keyfile."
         )
+        subtitle.setObjectName("pageSubtitle")
         subtitle.setWordWrap(True)
 
         self.vault_path_edit = QLineEdit()
@@ -81,10 +88,12 @@ class RecoveryPage(QWidget):
 
         vault_browse_button = QPushButton("Browse…")
         vault_browse_button.setObjectName("browseRecoveryVaultButton")
+        vault_browse_button.setIcon(app_icon("folder"))
         vault_browse_button.clicked.connect(self._browse_vault)
 
         keyfile_browse_button = QPushButton("Browse…")
         keyfile_browse_button.setObjectName("browseRecoveryKeyfileButton")
+        keyfile_browse_button.setIcon(app_icon("key"))
         keyfile_browse_button.clicked.connect(self._browse_new_keyfile)
 
         vault_row = QHBoxLayout()
@@ -139,28 +148,41 @@ class RecoveryPage(QWidget):
 
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("cancelRecoveryButton")
+        self.cancel_button.setIcon(app_icon("back"))
         self.cancel_button.clicked.connect(self._cancel)
 
-        self.recover_button = QPushButton("Recover Vault")
+        self.recover_button = QPushButton("Recover vault")
         self.recover_button.setObjectName("recoverVaultButton")
+        self.recover_button.setIcon(app_icon("shield", "#09201f"))
         self.recover_button.setDefault(True)
         self.recover_button.clicked.connect(self._emit_recovery)
         self.confirmation_edit.returnPressed.connect(self._emit_recovery)
 
         buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
         buttons.addWidget(self.cancel_button)
         buttons.addStretch()
         buttons.addWidget(self.recover_button)
 
+        surface = QFrame()
+        surface.setObjectName("formSurface")
+        surface_layout = QVBoxLayout(surface)
+        surface_layout.setContentsMargins(24, 22, 24, 22)
+        surface_layout.setSpacing(12)
+        surface_layout.addLayout(form)
+        surface_layout.addWidget(warning)
+        surface_layout.addWidget(self.error_label)
+        surface_layout.addLayout(buttons)
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(34, 30, 34, 28)
+        layout.setSpacing(8)
         layout.addStretch()
+        layout.addWidget(eyebrow)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(12)
-        layout.addLayout(form)
-        layout.addWidget(warning)
-        layout.addWidget(self.error_label)
-        layout.addLayout(buttons)
+        layout.addWidget(surface)
         layout.addStretch()
 
     def show_error(

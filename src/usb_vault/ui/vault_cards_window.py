@@ -288,17 +288,16 @@ class VaultCardsMainWindow(VaultLibraryMainWindow):
 
         self.unlock_page.vault_path_edit.setText(str(vault_path))
         self.unlock_page.keyfile_path_edit.clear()
+        self.unlock_page.set_selected_vault(display_name)
 
         self._pages.setCurrentWidget(self.unlock_page)
         self.unlock_page.password_edit.setFocus()
 
         self.statusBar().showMessage(
-            (
-                f"Enter the password for "
-                f"{display_name}. "
-                "A registered USB key will "
-                "be detected automatically."
-            )
+            f"Enter the password for "
+            f"{display_name}. "
+            "A registered USB key will "
+            "be detected automatically."
         )
 
     def _find_library_entry(

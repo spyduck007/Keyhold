@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -23,6 +26,7 @@ from usb_vault.core.vault.operations import (
 from usb_vault.ui.formatting import (
     format_file_size,
 )
+from usb_vault.ui.icons import app_icon
 
 
 class VaultPage(QWidget):
@@ -41,8 +45,11 @@ class VaultPage(QWidget):
 
         self.setObjectName("vaultPage")
 
-        title = QLabel("USB Vault")
-        title.setObjectName("vaultTitle")
+        eyebrow = QLabel("OPEN VAULT")
+        eyebrow.setObjectName("vaultEyebrow")
+
+        self.title = QLabel("Files")
+        self.title.setObjectName("vaultTitle")
 
         self.vault_path_label = QLabel()
         self.vault_path_label.setObjectName("openedVaultPathLabel")
@@ -62,9 +69,13 @@ class VaultPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setAlternatingRowColors(False)
+        self.table.setShowGrid(False)
         self.table.verticalHeader().hide()
+        self.table.verticalHeader().setDefaultSectionSize(42)
 
         header = self.table.horizontalHeader()
+        header.setFixedHeight(38)
         header.setSectionResizeMode(
             0,
             QHeaderView.ResizeMode.Stretch,
@@ -74,36 +85,85 @@ class VaultPage(QWidget):
             QHeaderView.ResizeMode.ResizeToContents,
         )
 
-        self.add_button = QPushButton("Add File…")
+        self.add_button = QPushButton("Add files")
         self.add_button.setObjectName("addFileButton")
+        self.add_button.setIcon(app_icon("plus", "#09201f"))
         self.add_button.clicked.connect(self.add_requested.emit)
 
-        self.extract_button = QPushButton("Export…")
+        self.extract_button = QPushButton("Export")
         self.extract_button.setObjectName("extractFileButton")
+        self.extract_button.setIcon(app_icon("download"))
         self.extract_button.setEnabled(False)
         self.extract_button.clicked.connect(self._emit_extract)
 
         self.delete_button = QPushButton("Delete")
         self.delete_button.setObjectName("deleteFileButton")
+        self.delete_button.setIcon(app_icon("trash", "#ffb2b2"))
         self.delete_button.setEnabled(False)
         self.delete_button.clicked.connect(self._emit_delete)
 
-        self.lock_button = QPushButton("Lock")
+        self.lock_button = QPushButton("Lock vault")
         self.lock_button.setObjectName("lockVaultButton")
+        self.lock_button.setIcon(app_icon("lock"))
         self.lock_button.clicked.connect(self.lock_requested.emit)
 
+        self.entry_count_label = QLabel("0 files")
+        self.entry_count_label.setObjectName("vaultEntryCount")
+
         buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.setSpacing(8)
         buttons.addWidget(self.add_button)
         buttons.addWidget(self.extract_button)
         buttons.addWidget(self.delete_button)
         buttons.addStretch()
-        buttons.addWidget(self.lock_button)
+        buttons.addWidget(self.entry_count_label)
+
+        empty_state = QFrame()
+        empty_state.setObjectName("emptyState")
+        empty_icon = QLabel()
+        empty_icon.setPixmap(app_icon("file", "#61d7c5").pixmap(44, 44))
+        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_title = QLabel("This vault is empty")
+        empty_title.setObjectName("emptyStateTitle")
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_description = QLabel("Add files or drag them here to encrypt them into this vault.")
+        empty_description.setObjectName("emptyStateDescription")
+        empty_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_description.setWordWrap(True)
+        empty_layout = QVBoxLayout(empty_state)
+        empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.setSpacing(9)
+        empty_layout.addWidget(empty_icon)
+        empty_layout.addWidget(empty_title)
+        empty_layout.addWidget(empty_description)
+
+        self.content_stack = QStackedWidget()
+        self.content_stack.setObjectName("vaultContentStack")
+        self.content_stack.addWidget(empty_state)
+        self.content_stack.addWidget(self.table)
+
+        table_surface = QFrame()
+        table_surface.setObjectName("vaultSurface")
+        table_layout = QVBoxLayout(table_surface)
+        table_layout.setContentsMargins(8, 8, 8, 8)
+        table_layout.addWidget(self.content_stack)
+
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.addWidget(self.title)
+        title_row.addStretch()
+        title_row.addWidget(self.lock_button)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(title)
+        layout.setContentsMargins(34, 30, 34, 28)
+        layout.setSpacing(8)
+        layout.addWidget(eyebrow)
+        layout.addLayout(title_row)
         layout.addWidget(self.vault_path_label)
-        layout.addWidget(self.table)
+        layout.addSpacing(6)
         layout.addLayout(buttons)
+        layout.addWidget(table_surface)
 
         self.table.itemSelectionChanged.connect(self._update_selection_actions)
 
@@ -112,6 +172,8 @@ class VaultPage(QWidget):
         vault_path: str,
     ) -> None:
         """Display the currently opened vault path."""
+        display_path = Path(vault_path)
+        self.title.setText(display_path.stem or "Files")
         self.vault_path_label.setText(vault_path)
 
     def set_entries(
@@ -125,8 +187,9 @@ class VaultPage(QWidget):
             row = self.table.rowCount()
             self.table.insertRow(row)
 
-            name_item = QTableWidgetItem(entry.name)
+            name_item = QTableWidgetItem(app_icon("file", "#9fb4cc"), entry.name)
             size_item = QTableWidgetItem(format_file_size(entry.size))
+            size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
             self.table.setItem(
                 row,
@@ -140,13 +203,20 @@ class VaultPage(QWidget):
             )
 
         self.table.clearSelection()
+        entry_count = self.table.rowCount()
+        noun = "file" if entry_count == 1 else "files"
+        self.entry_count_label.setText(f"{entry_count} {noun}")
+        self.content_stack.setCurrentIndex(1 if entry_count else 0)
         self._update_selection_actions()
 
     def clear_entries(self) -> None:
         """Remove all unlocked metadata from the view."""
         self.table.clearContents()
         self.table.setRowCount(0)
+        self.title.setText("Files")
         self.vault_path_label.clear()
+        self.entry_count_label.setText("0 files")
+        self.content_stack.setCurrentIndex(0)
         self._update_selection_actions()
 
     def selected_name(self) -> str | None:

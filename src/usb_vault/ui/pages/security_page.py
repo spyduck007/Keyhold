@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Qt,
     Signal,
 )
 from PySide6.QtWidgets import (
@@ -14,6 +13,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.security_backend import (
     SecuritySnapshot,
 )
@@ -56,12 +57,16 @@ class SecurityPage(QWidget):
         self._additional_keyfile_count = 0
         self._recovery_required = False
 
-        title = QLabel("Vault Security")
+        eyebrow = QLabel("SECURITY CENTER")
+        eyebrow.setObjectName("securityEyebrow")
+
+        title = QLabel("Vault security")
         title.setObjectName("securityPageTitle")
 
         subtitle = QLabel(
             "Manage independent USB keys and rotate the password protecting every unlock method."
         )
+        subtitle.setObjectName("pageSubtitle")
         subtitle.setWordWrap(True)
 
         key_group = self._create_key_group()
@@ -74,10 +79,16 @@ class SecurityPage(QWidget):
 
         self.close_button = QPushButton("Back to Vault")
         self.close_button.setObjectName("closeSecurityButton")
+        self.close_button.setIcon(app_icon("back"))
         self.close_button.clicked.connect(self.close_requested.emit)
 
         content = QWidget()
+        content.setObjectName("securityContent")
+        content.setStyleSheet("background: #0b1220;")
         content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(34, 30, 34, 28)
+        content_layout.setSpacing(10)
+        content_layout.addWidget(eyebrow)
         content_layout.addWidget(title)
         content_layout.addWidget(subtitle)
         content_layout.addSpacing(10)
@@ -91,8 +102,10 @@ class SecurityPage(QWidget):
         scroll_area.setObjectName("securityScrollArea")
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(content)
+        scroll_area.viewport().setStyleSheet("background: #0b1220;")
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(scroll_area)
 
     def set_snapshot(
@@ -116,7 +129,7 @@ class SecurityPage(QWidget):
             self.keys_table.insertRow(row)
 
             key_id_item = QTableWidgetItem(key.key_id_hex)
-            role_item = QTableWidgetItem(("Current" if key.is_current else "Backup"))
+            role_item = QTableWidgetItem("Current" if key.is_current else "Backup")
 
             self.keys_table.setItem(
                 row,
@@ -129,16 +142,12 @@ class SecurityPage(QWidget):
                 role_item,
             )
 
-        self.key_count_label.setText((f"{len(snapshot.keys)} registered USB key(s)"))
+        self.key_count_label.setText(f"{len(snapshot.keys)} registered USB key(s)")
 
-        self.additional_keys_label.setText(
-            (
-                "Select exactly "
-                f"{self._additional_keyfile_count} "
-                "additional registered USB "
-                "keyfile(s)."
-            )
+        additional_keys_message = (
+            f"Select exactly {self._additional_keyfile_count} additional registered USB keyfile(s)."
         )
+        self.additional_keys_label.setText(additional_keys_message)
 
         self.recovery_code_label.setVisible(self._recovery_required)
         self.recovery_code_edit.setVisible(self._recovery_required)
@@ -226,18 +235,27 @@ class SecurityPage(QWidget):
         self.keys_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.keys_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.keys_table.verticalHeader().hide()
+        self.keys_table.horizontalHeader().setFixedHeight(38)
+        self.keys_table.verticalHeader().setDefaultSectionSize(40)
+        self.keys_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.keys_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
         self.keys_table.itemSelectionChanged.connect(self._update_revoke_button)
 
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("refreshSecurityButton")
+        self.refresh_button.setIcon(app_icon("refresh"))
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
 
-        self.add_key_button = QPushButton("Create Backup USB…")
+        self.add_key_button = QPushButton("Create backup key")
         self.add_key_button.setObjectName("addSecurityKeyButton")
+        self.add_key_button.setIcon(app_icon("key"))
         self.add_key_button.clicked.connect(self._choose_new_keyfile)
 
         self.revoke_key_button = QPushButton("Revoke Selected")
         self.revoke_key_button.setObjectName("revokeSecurityKeyButton")
+        self.revoke_key_button.setIcon(app_icon("trash", "#ffb2b2"))
         self.revoke_key_button.setEnabled(False)
         self.revoke_key_button.clicked.connect(self._emit_revoke)
 
@@ -291,10 +309,12 @@ class SecurityPage(QWidget):
 
         add_existing_button = QPushButton("Select Keyfiles…")
         add_existing_button.setObjectName("selectPasswordKeyfilesButton")
+        add_existing_button.setIcon(app_icon("folder"))
         add_existing_button.clicked.connect(self._choose_additional_keyfiles)
 
         remove_existing_button = QPushButton("Remove Selected")
         remove_existing_button.setObjectName("removePasswordKeyfileButton")
+        remove_existing_button.setIcon(app_icon("trash", "#ffb2b2"))
         remove_existing_button.clicked.connect(self._remove_selected_keyfile)
 
         keyfile_buttons = QHBoxLayout()
@@ -310,6 +330,7 @@ class SecurityPage(QWidget):
 
         self.change_password_button = QPushButton("Change Password")
         self.change_password_button.setObjectName("changeSecurityPasswordButton")
+        self.change_password_button.setIcon(app_icon("key", "#09201f"))
         self.change_password_button.clicked.connect(self._emit_password_change)
 
         form = QFormLayout()
@@ -412,14 +433,12 @@ class SecurityPage(QWidget):
             return
 
         if len(additional_paths) != self._additional_keyfile_count:
-            self.show_error(
-                (
-                    "Select exactly "
-                    f"{self._additional_keyfile_count} "
-                    "additional registered USB "
-                    "keyfile(s)."
-                )
+            message = (
+                "Select exactly "
+                f"{self._additional_keyfile_count} "
+                "additional registered USB keyfile(s)."
             )
+            self.show_error(message)
             return
 
         if self._recovery_required and not recovery_code:
@@ -448,7 +467,7 @@ class SecurityPage(QWidget):
             1,
         )
 
-        self.revoke_key_button.setEnabled((role_item is not None and role_item.text() != "Current"))
+        self.revoke_key_button.setEnabled(role_item is not None and role_item.text() != "Current")
 
     def _set_passwords_visible(
         self,
