@@ -24,7 +24,13 @@ from usb_vault.platform.macos.usb_volumes import (
     MacOsUsbVolumeLocator,
     UsbVolumeLocator,
 )
-from usb_vault.ui.components import FORM_MAX_WIDTH, SPACE_6, PageHeader, ResponsivePage
+from usb_vault.ui.components import (
+    FORM_MAX_WIDTH,
+    SPACE_6,
+    PageHeader,
+    ResponsivePage,
+    form_label,
+)
 from usb_vault.ui.icons import app_icon
 
 DEFAULT_USB_KEYFILE_NAME = ".authkey"
@@ -79,7 +85,12 @@ class SetupPage(ResponsivePage):
         *,
         usb_volume_locator: UsbVolumeLocator | None = None,
     ) -> None:
-        super().__init__("setupPage", max_width=FORM_MAX_WIDTH, parent=parent)
+        super().__init__(
+            "setupPage",
+            max_width=FORM_MAX_WIDTH,
+            center_vertically=True,
+            parent=parent,
+        )
 
         self._usb_volume_locator = (
             usb_volume_locator if usb_volume_locator is not None else MacOsUsbVolumeLocator()
@@ -131,32 +142,32 @@ class SetupPage(ResponsivePage):
         refresh_usb_volumes_button.clicked.connect(self.refresh_usb_volumes)
 
         vault_row = QHBoxLayout()
-        vault_row.addWidget(self.vault_path_edit)
-        vault_row.addWidget(vault_browse_button)
+        vault_row.addWidget(self.vault_path_edit, 1)
+        vault_row.addWidget(vault_browse_button, 0)
 
         keyfile_row = QHBoxLayout()
-        keyfile_row.addWidget(self.usb_volume_combo)
-        keyfile_row.addWidget(refresh_usb_volumes_button)
+        keyfile_row.addWidget(self.usb_volume_combo, 1)
+        keyfile_row.addWidget(refresh_usb_volumes_button, 0)
 
         form = QFormLayout()
         form.addRow(
-            "Vault:",
+            form_label("Vault file"),
             vault_row,
         )
         form.addRow(
-            "USB key:",
+            form_label("USB key"),
             keyfile_row,
         )
         form.addRow(
-            "Keyfile:",
+            form_label("Keyfile"),
             self.keyfile_path_edit,
         )
         form.addRow(
-            "Password:",
+            form_label("Password"),
             self.password_edit,
         )
         form.addRow(
-            "Confirm:",
+            form_label("Confirm password"),
             self.confirmation_edit,
         )
         form.addRow(
@@ -197,9 +208,10 @@ class SetupPage(ResponsivePage):
         surface_layout.addLayout(buttons)
 
         self.content_layout.setSpacing(SPACE_6)
+        self.content_layout.addStretch(1)
         self.content_layout.addWidget(header)
         self.content_layout.addWidget(surface)
-        self.content_layout.addStretch()
+        self.content_layout.addStretch(1)
 
         self.refresh_usb_volumes()
 

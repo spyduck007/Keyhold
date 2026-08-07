@@ -38,6 +38,9 @@ INVALID_MANIFEST_MESSAGE = "Invalid vault manifest."
 
 ENTRY_ID_LENGTH = 16
 MAX_ENTRY_NAME_BYTES = 255
+MAX_ENTRY_PATH_BYTES = 1_024
+MAX_PATH_SEGMENTS = 32
+FOLDER_MARKER_NAME = ".vaultkeep"
 
 _MANIFEST_FIELDS = {
     "magic",
@@ -308,7 +311,7 @@ def create_vault_entry(
 def normalize_entry_name(
     name: str,
 ) -> str:
-    """Normalize and validate one root-level filename."""
+    """Normalize and validate one filename or '/'-delimited folder path."""
     if not isinstance(name, str):
         raise TypeError("name must be a string")
 
@@ -320,16 +323,41 @@ def normalize_entry_name(
     if not normalized or normalized.isspace():
         raise ValueError("name must not be empty")
 
-    if normalized in {".", ".."}:
-        raise ValueError("name is not allowed")
+    if "\x00" in normalized or "\\" in normalized:
+        raise ValueError("name contains unsupported characters")
 
-    if "\x00" in normalized or "/" in normalized or "\\" in normalized:
-        raise ValueError("name must be a root-level filename")
+    if normalized.startswith("/") or normalized.endswith("/"):
+        raise ValueError("name must not start or end with '/'")
 
-    if len(normalized.encode("utf-8")) > MAX_ENTRY_NAME_BYTES:
+    if len(normalized.encode("utf-8")) > MAX_ENTRY_PATH_BYTES:
         raise ValueError("name is too long")
 
+    segments = normalized.split("/")
+
+    if len(segments) > MAX_PATH_SEGMENTS:
+        raise ValueError("name has too many folder levels")
+
+    for segment in segments:
+        _require_safe_path_segment(segment)
+
     return normalized
+
+
+def _require_safe_path_segment(segment: str) -> None:
+    if not segment or segment.isspace():
+        raise ValueError("name must not contain empty path segments")
+
+    if segment in {".", ".."}:
+        raise ValueError("name is not allowed")
+
+    if len(segment.encode("utf-8")) > MAX_ENTRY_NAME_BYTES:
+        raise ValueError("a path segment is too long")
+
+
+def folder_marker_name(folder_path: str) -> str:
+    """Return the hidden marker entry name that keeps a folder listed when empty."""
+    normalized_folder = normalize_entry_name(folder_path)
+    return normalize_entry_name(f"{normalized_folder}/{FOLDER_MARKER_NAME}")
 
 
 def manifest_associated_data(

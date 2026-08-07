@@ -101,7 +101,7 @@ class VaultCard(QFrame):
         metadata = QLabel(f"Last opened {_format_last_opened(entry.last_opened_at)}")
         metadata.setObjectName("vaultCardMeta")
 
-        security_hint = QLabel("Password + registered USB key required")
+        security_hint = ElidedLabel("Password + registered USB key required")
         security_hint.setObjectName("vaultCardHint")
 
         self.open_button = QPushButton("Open vault")
@@ -113,9 +113,8 @@ class VaultCard(QFrame):
 
         footer = QHBoxLayout()
         footer.setContentsMargins(0, 0, 0, 0)
-        footer.addWidget(security_hint)
-        footer.addStretch()
-        footer.addWidget(self.open_button)
+        footer.addWidget(security_hint, 1)
+        footer.addWidget(self.open_button, 0)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SPACE_6, SPACE_4, SPACE_6, SPACE_4)
@@ -292,9 +291,13 @@ class VaultLibraryPage(ResponsivePage):
             legacy_empty_label.hide()
             empty_layout.addWidget(legacy_empty_label)
 
+            self._cards_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._cards_layout.addWidget(empty_state, 0, 0, 1, 3)
             return
 
+        self._cards_layout.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
         for index, entry in enumerate(normalized_entries):
             card = VaultCard(entry)
             card.open_requested.connect(self._forward_open)

@@ -15,6 +15,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPaintEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLayout,
@@ -46,6 +47,7 @@ class ResponsivePage(QWidget):
         object_name: str,
         *,
         max_width: int = CONTENT_MAX_WIDTH,
+        center_vertically: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -64,7 +66,10 @@ class ResponsivePage(QWidget):
         self.content_layout.setSpacing(SPACE_4)
 
         self._outer_layout = QHBoxLayout(self)
-        self._outer_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        outer_alignment = Qt.AlignmentFlag.AlignHCenter
+        if not center_vertically:
+            outer_alignment |= Qt.AlignmentFlag.AlignTop
+        self._outer_layout.setAlignment(outer_alignment)
         self._outer_layout.addWidget(self.content)
         self._update_gutters()
 
@@ -91,6 +96,13 @@ class ResponsivePage(QWidget):
             horizontal,
             vertical,
         )
+
+
+def form_label(text: str) -> QLabel:
+    """A QFormLayout row label styled consistently with the rest of the app."""
+    label = QLabel(text)
+    label.setObjectName("formLabel")
+    return label
 
 
 class PageHeader(QWidget):
@@ -326,10 +338,13 @@ class ScanningBar(QWidget):
 class ToastBanner(QFrame):
     """Temporary in-app feedback displayed near the current interaction."""
 
+    MIN_WIDTH = 220
+    MAX_WIDTH = 520
+    TOP_OFFSET = 16
+
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("toastBanner")
-        self.setMaximumWidth(560)
         self.hide()
 
         self.label = QLabel()
@@ -344,13 +359,19 @@ class ToastBanner(QFrame):
 
         content = QVBoxLayout()
         content.setContentsMargins(0, 0, 0, 0)
-        content.setSpacing(SPACE_2)
+        content.setSpacing(SPACE_1)
         content.addWidget(self.label)
         content.addWidget(self.activity)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(SPACE_4, SPACE_3, SPACE_4, SPACE_3)
-        layout.addLayout(content)
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(SPACE_3, SPACE_2, SPACE_3, SPACE_2)
+        self._layout.addLayout(content)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(18)
+        shadow.setOffset(0, 5)
+        shadow.setColor(QColor(0, 0, 0, 90))
+        self.setGraphicsEffect(shadow)
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -363,7 +384,7 @@ class ToastBanner(QFrame):
             return
 
         self.label.setText(normalized)
-        self.adjustSize()
+        self._apply_content_width()
         self._position()
         self.show()
         self.raise_()
@@ -385,12 +406,24 @@ class ToastBanner(QFrame):
             self._position()
         return super().eventFilter(watched, event)
 
+    def _apply_content_width(self) -> None:
+        # A frameless width guess makes Qt wrap word-wrapped labels into a
+        # narrow, many-line column. Pick a sane width from the message's
+        # natural single-line length first, then let it wrap within that.
+        metrics = QFontMetrics(self.label.font())
+        text_width = metrics.horizontalAdvance(self.label.text())
+        margins = self._layout.contentsMargins()
+        chrome = margins.left() + margins.right()
+        width = max(self.MIN_WIDTH, min(text_width + chrome, self.MAX_WIDTH))
+        self.setFixedWidth(width)
+        self.adjustSize()
+
     def _position(self) -> None:
         parent = self.parentWidget()
         if parent is None:
             return
         x = max(SPACE_4, (parent.width() - self.width()) // 2)
-        self.move(x, SPACE_6)
+        self.move(x, self.TOP_OFFSET)
 
 
 class FeedbackStatusBar(QStatusBar):

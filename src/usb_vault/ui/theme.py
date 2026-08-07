@@ -202,18 +202,22 @@ QToolTip {
 }
 QLabel#unlockErrorLabel, QLabel#setupErrorLabel, QLabel#recoveryPageErrorLabel,
 QLabel#securityPageErrorLabel, QLabel#vaultLibraryErrorLabel {
-    color: #ffc1c1;
-    background: #3a2029;
-    border: 1px solid #703746;
-    border-radius: 8px;
-    padding: 9px;
+    color: #ffc9c9;
+    background: #34202a;
+    border: 1px solid #6b3444;
+    border-left: 3px solid #e87982;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 600;
 }
 QLabel#recoveryCodeWarning, QLabel#recoveryRotationWarning {
-    color: #f2c48f;
-    background: #30271d;
-    border: 1px solid #5b4630;
-    border-radius: 8px;
-    padding: 9px;
+    color: #f5cc98;
+    background: #2e2519;
+    border: 1px solid #5c4730;
+    border-left: 3px solid #e7ad68;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 600;
 }
 QPlainTextEdit#recoveryCodeEdit {
     font-family: "Menlo", monospace;
@@ -280,6 +284,7 @@ QToolButton {
     background: transparent; border: none; padding: 7px;
 }
 QToolButton:hover { background: #1c2c42; }
+QToolButton::menu-indicator { image: none; width: 0; height: 0; }
 QPushButton#ghostButton { background: transparent; border-color: transparent; }
 QPushButton#ghostButton:hover { background: #19283c; }
 QPushButton#dangerButton, QPushButton#deleteFileButton,
@@ -298,9 +303,17 @@ QFrame#statusDot[tone="danger"] { background: #e87982; }
 QLabel#statusBadgeLabel { color: #b8c8d8; font-size: 13px; font-weight: 600; }
 
 QFrame#toastBanner {
-    background: #18283c; border: 1px solid #34506c; border-radius: 10px;
+    background: #1c3040; border: 1px solid #3f6270; border-radius: 9px;
 }
-QLabel#toastText { color: #eaf2ff; font-size: 13px; font-weight: 600; }
+QLabel#toastText { color: #f4f8ff; font-size: 12px; font-weight: 600; }
+QProgressBar#toastActivity {
+    background: #16273a;
+    border: none;
+    border-radius: 2px;
+    min-height: 4px;
+    max-height: 4px;
+}
+QProgressBar#toastActivity::chunk { background: #4ed4c1; border-radius: 2px; }
 
 QFrame#vaultCard { min-width: 300px; max-width: 420px; }
 QFrame#vaultCard:hover { background: #15243a; border-color: #38516d; }
@@ -319,6 +332,18 @@ QHeaderView::section {
     border-bottom-color: #26394f;
 }
 QTableWidget::item:selected { background: #193c47; }
+
+QWidget#breadcrumbBar { background: transparent; }
+QPushButton#breadcrumbLink {
+    background: transparent; border: none; padding: 2px 4px;
+    color: #8fa5bd; font-weight: 600; font-size: 13px; min-height: 0;
+}
+QPushButton#breadcrumbLink:hover { color: #6fd7c5; }
+QPushButton#breadcrumbCurrent {
+    background: transparent; border: none; padding: 2px 4px;
+    color: #f4f8ff; font-weight: 700; font-size: 13px; min-height: 0;
+}
+QPushButton#breadcrumbCurrent:disabled { color: #f4f8ff; }
 
 QLabel#authStepActive {
     color: #dffbf6; background: #17373b; border: 1px solid #2a6666;

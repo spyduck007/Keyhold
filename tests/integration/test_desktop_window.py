@@ -46,6 +46,7 @@ class FakeBackend:
     )
     unlock_error: Exception | None = None
     added_paths: list[Path] = field(default_factory=list)
+    added_stored_names: list[str | None] = field(default_factory=list)
     extracted: list[
         tuple[
             str,
@@ -54,6 +55,8 @@ class FakeBackend:
         ]
     ] = field(default_factory=list)
     deleted_names: list[str] = field(default_factory=list)
+    created_folders: list[str] = field(default_factory=list)
+    deleted_folders: list[str] = field(default_factory=list)
 
     def unlock(
         self,
@@ -87,6 +90,7 @@ class FakeBackend:
     ) -> VaultEntrySummary:
         vault.password_bytes()
         self.added_paths.append(source_path)
+        self.added_stored_names.append(stored_name)
 
         result = VaultEntrySummary(
             name=(stored_name or source_path.name),
@@ -129,6 +133,39 @@ class FakeBackend:
 
         self.deleted_names.append(stored_name)
         self.entries = tuple(entry for entry in self.entries if entry.name != stored_name)
+
+        return removed
+
+    def create_folder(
+        self,
+        vault: UnlockedVault,
+        folder_path: str,
+    ) -> VaultEntrySummary:
+        vault.password_bytes()
+        self.created_folders.append(folder_path)
+
+        result = VaultEntrySummary(
+            name=f"{folder_path}/.vaultkeep",
+            size=0,
+        )
+        self.entries = (
+            *self.entries,
+            result,
+        )
+
+        return result
+
+    def delete_folder(
+        self,
+        vault: UnlockedVault,
+        folder_path: str,
+    ) -> tuple[VaultEntrySummary, ...]:
+        vault.password_bytes()
+        self.deleted_folders.append(folder_path)
+
+        prefix = f"{folder_path}/"
+        removed = tuple(entry for entry in self.entries if entry.name.startswith(prefix))
+        self.entries = tuple(entry for entry in self.entries if not entry.name.startswith(prefix))
 
         return removed
 
@@ -326,6 +363,54 @@ def test_file_actions_refresh_browser(
         "notes.txt",
     ]
     assert window.vault_page.table.rowCount() == 1
+
+
+def test_folder_actions_refresh_browser(
+    qtbot: QtBot,
+) -> None:
+    backend = FakeBackend()
+    window = MainWindow(backend=backend)
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    _fill_unlock_page(window)
+    _click_unlock(window)
+
+    assert window.create_folder("Documents")
+    assert backend.created_folders == ["Documents"]
+    assert window.vault_page.table.rowCount() == 2
+
+    row_kinds = {
+        window.vault_page.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        for row in range(window.vault_page.table.rowCount())
+    }
+    assert ("folder", "Documents") in row_kinds
+
+    assert window.delete_folder("Documents")
+    assert backend.deleted_folders == ["Documents"]
+    assert window.vault_page.table.rowCount() == 1
+
+
+def test_adding_a_file_inside_an_open_folder_uses_a_prefixed_name(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    backend = FakeBackend(entries=(VaultEntrySummary(name="Documents/.vaultkeep", size=0),))
+    window = MainWindow(backend=backend)
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    _fill_unlock_page(window)
+    _click_unlock(window)
+
+    folder_item = window.vault_page.table.item(0, 0)
+    window.vault_page.table.selectRow(0)
+    window.vault_page._on_row_activated(folder_item)
+    assert window.vault_page.current_folder == "Documents"
+
+    source = tmp_path / "2024.pdf"
+    assert window.add_file_from_path(source)
+    assert backend.added_stored_names == ["Documents/2024.pdf"]
 
 
 def test_new_vault_setup_opens_created_vault(

@@ -13,11 +13,13 @@ from usb_vault.core.storage.format import VAULT_ID_LENGTH
 from usb_vault.core.vault.blob import BLOB_ID_LENGTH
 from usb_vault.core.vault.manifest import (
     ENTRY_ID_LENGTH,
+    FOLDER_MARKER_NAME,
     MANIFEST_MAGIC,
     MANIFEST_VERSION,
     VaultEntry,
     VaultManifest,
     create_vault_entry,
+    folder_marker_name,
     manifest_associated_data,
     normalize_entry_name,
 )
@@ -143,9 +145,15 @@ def test_missing_entry_is_rejected() -> None:
         "   ",
         ".",
         "..",
-        "folder/file.txt",
         "folder\\file.txt",
         "bad\x00name",
+        "/leading-slash.txt",
+        "trailing-slash/",
+        "double//slash.txt",
+        "folder/./file.txt",
+        "folder/../file.txt",
+        "a" * 260,
+        "/".join(["segment"] * 40),
     ],
 )
 def test_unsafe_names_are_rejected(
@@ -153,6 +161,20 @@ def test_unsafe_names_are_rejected(
 ) -> None:
     with pytest.raises(ValueError):
         normalize_entry_name(name)
+
+
+def test_nested_folder_path_is_accepted() -> None:
+    entry = create_vault_entry(
+        name="Documents/Taxes/2024.pdf",
+        size=0,
+        blob_id=(b"B" * BLOB_ID_LENGTH),
+    )
+
+    assert entry.name == "Documents/Taxes/2024.pdf"
+
+
+def test_folder_marker_name_is_hidden_child_of_folder() -> None:
+    assert folder_marker_name("Documents/Taxes") == f"Documents/Taxes/{FOLDER_MARKER_NAME}"
 
 
 def test_unicode_name_is_normalized() -> None:

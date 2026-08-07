@@ -14,9 +14,12 @@ from usb_vault.core.storage.container import VaultContainer
 from usb_vault.core.storage.reader import read_vault_container
 from usb_vault.core.storage.writer import write_vault_container
 from usb_vault.core.vault.creator import create_vault
+from usb_vault.core.vault.manifest import FOLDER_MARKER_NAME
 from usb_vault.core.vault.operations import (
     add_file,
+    create_folder,
     delete_file,
+    delete_folder,
     extract_file,
     list_files,
 )
@@ -340,6 +343,143 @@ def test_blob_corruption_is_detected(
             password=PASSWORD,
             stored_name=source.name,
             destination_path=(tmp_path / "out.bin"),
+        )
+
+
+def test_create_folder_adds_hidden_marker_entry(
+    tmp_path: Path,
+) -> None:
+    (
+        vault_path,
+        keyfile_path,
+    ) = _create_paths(tmp_path)
+
+    created = create_folder(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        folder_path="Documents",
+    )
+
+    assert created.name == f"Documents/{FOLDER_MARKER_NAME}"
+    assert created.size == 0
+    assert list_files(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+    ) == (created,)
+
+
+def test_create_folder_supports_nesting_and_rejects_duplicates(
+    tmp_path: Path,
+) -> None:
+    (
+        vault_path,
+        keyfile_path,
+    ) = _create_paths(tmp_path)
+
+    create_folder(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        folder_path="Documents",
+    )
+    create_folder(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        folder_path="Documents/Taxes",
+    )
+
+    entries = list_files(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+    )
+    assert {entry.name for entry in entries} == {
+        f"Documents/{FOLDER_MARKER_NAME}",
+        f"Documents/Taxes/{FOLDER_MARKER_NAME}",
+    }
+
+    with pytest.raises(EntryExistsError):
+        create_folder(
+            vault_path=vault_path,
+            keyfile_path=keyfile_path,
+            password=PASSWORD,
+            folder_path="Documents",
+        )
+
+
+def test_delete_folder_removes_every_nested_entry_atomically(
+    tmp_path: Path,
+) -> None:
+    (
+        vault_path,
+        keyfile_path,
+    ) = _create_paths(tmp_path)
+
+    source = tmp_path / "source.txt"
+    source.write_text("tax records", encoding="utf-8")
+
+    create_folder(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        folder_path="Documents",
+    )
+    create_folder(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        folder_path="Documents/Taxes",
+    )
+    add_file(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        source_path=source,
+        stored_name="Documents/Taxes/2024.pdf",
+    )
+    add_file(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        source_path=source,
+        stored_name="Keep.txt",
+    )
+
+    removed = delete_folder(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+        folder_path="Documents",
+    )
+
+    assert {entry.name for entry in removed} == {"Documents/Taxes/2024.pdf"}
+
+    remaining = list_files(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=PASSWORD,
+    )
+    assert [entry.name for entry in remaining] == ["Keep.txt"]
+    assert len(read_vault_container(vault_path).blobs) == 1
+
+
+def test_delete_folder_missing_is_rejected(
+    tmp_path: Path,
+) -> None:
+    (
+        vault_path,
+        keyfile_path,
+    ) = _create_paths(tmp_path)
+
+    with pytest.raises(EntryNotFoundError):
+        delete_folder(
+            vault_path=vault_path,
+            keyfile_path=keyfile_path,
+            password=PASSWORD,
+            folder_path="Missing",
         )
 
 

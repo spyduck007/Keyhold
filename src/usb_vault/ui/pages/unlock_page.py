@@ -37,7 +37,12 @@ class UnlockPage(ResponsivePage):
     cancel_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("unlockPage", max_width=AUTH_PANEL_MAX_WIDTH, parent=parent)
+        super().__init__(
+            "unlockPage",
+            max_width=AUTH_PANEL_MAX_WIDTH,
+            center_vertically=True,
+            parent=parent,
+        )
 
         self._waiting_for_usb = False
         self._unlocking = False
@@ -197,8 +202,9 @@ class UnlockPage(ResponsivePage):
         panel_layout.addWidget(self.form_surface)
         panel_layout.addWidget(self.wait_surface)
 
+        self.content_layout.addStretch(1)
         self.content_layout.addWidget(self.auth_panel)
-        self.content_layout.addStretch()
+        self.content_layout.addStretch(1)
 
     @property
     def is_waiting_for_usb(self) -> bool:

@@ -54,9 +54,11 @@ from usb_vault.core.vault.chunk_stream import (
 )
 from usb_vault.core.vault.manifest import (
     ENTRY_ID_LENGTH,
+    FOLDER_MARKER_NAME,
     VaultEntry,
     VaultManifest,
     create_vault_entry,
+    folder_marker_name,
     manifest_associated_data,
     normalize_entry_name,
 )
@@ -149,6 +151,36 @@ def add_file(
         name=entry.name,
         size=entry.size,
     )
+
+
+def create_folder(
+    *,
+    vault_path: str | Path,
+    keyfile_path: str | Path,
+    password: (str | bytes | bytearray | memoryview),
+    folder_path: str,
+) -> VaultEntrySummary:
+    """Create an empty folder using a hidden zero-byte marker entry."""
+    marker_name = folder_marker_name(folder_path)
+
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".usb-vault-folder.",
+        suffix=".tmp",
+    )
+    os.close(file_descriptor)
+    temporary_path = Path(temporary_name)
+
+    try:
+        return add_file(
+            vault_path=vault_path,
+            keyfile_path=keyfile_path,
+            password=password,
+            source_path=temporary_path,
+            stored_name=marker_name,
+        )
+    finally:
+        with suppress(FileNotFoundError):
+            temporary_path.unlink()
 
 
 def list_files(
@@ -329,6 +361,67 @@ def delete_file(
         return VaultEntrySummary(
             name=removed_entry.name,
             size=removed_entry.size,
+        )
+
+
+def delete_folder(
+    *,
+    vault_path: str | Path,
+    keyfile_path: str | Path,
+    password: (str | bytes | bytearray | memoryview),
+    folder_path: str,
+) -> tuple[VaultEntrySummary, ...]:
+    """Remove a folder and every entry nested beneath it, atomically."""
+    normalized_folder = normalize_entry_name(folder_path)
+    prefix = f"{normalized_folder}/"
+
+    with unlock_vault(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=password,
+    ) as session:
+        removed_entries = tuple(
+            entry for entry in session.manifest.entries if entry.name.startswith(prefix)
+        )
+
+        if not removed_entries:
+            raise EntryNotFoundError(f"Vault folder not found: {normalized_folder}")
+
+        removed_blob_ids = {entry.blob_id for entry in removed_entries}
+        remaining_entries = tuple(
+            entry for entry in session.manifest.entries if entry.blob_id not in removed_blob_ids
+        )
+        updated_manifest = VaultManifest(entries=remaining_entries)
+
+        remaining_blobs = tuple(
+            blob for blob in session.blobs if blob.blob_id not in removed_blob_ids
+        )
+        master_key = session.copy_master_key()
+        temporary_paths: list[Path] = []
+
+        try:
+            stored_blobs, paths = _materialize_blob_sources(
+                session,
+                remaining_blobs,
+            )
+            temporary_paths.extend(paths)
+
+            _write_updated_vault(
+                session=session,
+                manifest=updated_manifest,
+                blobs=stored_blobs,
+                master_key=master_key,
+            )
+        finally:
+            _remove_temporary_paths(temporary_paths)
+
+        return tuple(
+            VaultEntrySummary(
+                name=entry.name,
+                size=entry.size,
+            )
+            for entry in removed_entries
+            if not entry.name.endswith(f"/{FOLDER_MARKER_NAME}")
         )
 
 

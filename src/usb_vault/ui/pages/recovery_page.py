@@ -17,7 +17,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from usb_vault.ui.components import FORM_MAX_WIDTH, SPACE_6, PageHeader, ResponsivePage
+from usb_vault.ui.components import (
+    FORM_MAX_WIDTH,
+    SPACE_6,
+    PageHeader,
+    ResponsivePage,
+    form_label,
+)
 from usb_vault.ui.icons import app_icon
 
 
@@ -37,7 +43,12 @@ class RecoveryPage(ResponsivePage):
         self,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__("recoveryPage", max_width=FORM_MAX_WIDTH, parent=parent)
+        super().__init__(
+            "recoveryPage",
+            max_width=FORM_MAX_WIDTH,
+            center_vertically=True,
+            parent=parent,
+        )
 
         header = PageHeader(
             "RECOVERY",
@@ -90,28 +101,28 @@ class RecoveryPage(ResponsivePage):
         keyfile_browse_button.clicked.connect(self._browse_new_keyfile)
 
         vault_row = QHBoxLayout()
-        vault_row.addWidget(self.vault_path_edit)
-        vault_row.addWidget(vault_browse_button)
+        vault_row.addWidget(self.vault_path_edit, 1)
+        vault_row.addWidget(vault_browse_button, 0)
 
         keyfile_row = QHBoxLayout()
-        keyfile_row.addWidget(self.new_keyfile_path_edit)
-        keyfile_row.addWidget(keyfile_browse_button)
+        keyfile_row.addWidget(self.new_keyfile_path_edit, 1)
+        keyfile_row.addWidget(keyfile_browse_button, 0)
 
         form = QFormLayout()
         form.addRow(
-            "Vault:",
+            form_label("Vault file"),
             vault_row,
         )
         form.addRow(
-            "Replacement USB:",
+            form_label("Replacement USB"),
             keyfile_row,
         )
         form.addRow(
-            "Password:",
+            form_label("Password"),
             self.password_edit,
         )
         form.addRow(
-            "Confirm:",
+            form_label("Confirm password"),
             self.confirmation_edit,
         )
         form.addRow(
@@ -119,7 +130,7 @@ class RecoveryPage(ResponsivePage):
             self.show_password_checkbox,
         )
         form.addRow(
-            "Recovery code:",
+            form_label("Recovery code"),
             self.recovery_code_edit,
         )
         form.addRow(
@@ -168,9 +179,10 @@ class RecoveryPage(ResponsivePage):
         surface_layout.addLayout(buttons)
 
         self.content_layout.setSpacing(SPACE_6)
+        self.content_layout.addStretch(1)
         self.content_layout.addWidget(header)
         self.content_layout.addWidget(surface)
-        self.content_layout.addStretch()
+        self.content_layout.addStretch(1)
 
     def show_error(
         self,

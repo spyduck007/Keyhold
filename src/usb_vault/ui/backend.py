@@ -9,7 +9,9 @@ from typing import Protocol
 from usb_vault.core.vault.operations import (
     VaultEntrySummary,
     add_file as core_add_file,
+    create_folder as core_create_folder,
     delete_file as core_delete_file,
+    delete_folder as core_delete_folder,
     extract_file as core_extract_file,
     list_files as core_list_files,
 )
@@ -120,6 +122,23 @@ class VaultBackend(Protocol):
     ) -> VaultEntrySummary:
         """Delete one file."""
 
+    def create_folder(
+        self,
+        vault: UnlockedVault,
+        folder_path: str,
+    ) -> VaultEntrySummary:
+        """Create one empty folder."""
+
+    def delete_folder(
+        self,
+        vault: UnlockedVault,
+        folder_path: str,
+    ) -> tuple[
+        VaultEntrySummary,
+        ...,
+    ]:
+        """Delete one folder and everything nested inside it."""
+
 
 class CoreVaultBackend:
     """Production UI backend using the existing vault core."""
@@ -196,4 +215,33 @@ class CoreVaultBackend:
             keyfile_path=(vault.keyfile_path),
             password=(vault.password_bytes()),
             stored_name=stored_name,
+        )
+
+    def create_folder(
+        self,
+        vault: UnlockedVault,
+        folder_path: str,
+    ) -> VaultEntrySummary:
+        """Create one empty folder using a hidden marker entry."""
+        return core_create_folder(
+            vault_path=vault.vault_path,
+            keyfile_path=(vault.keyfile_path),
+            password=(vault.password_bytes()),
+            folder_path=folder_path,
+        )
+
+    def delete_folder(
+        self,
+        vault: UnlockedVault,
+        folder_path: str,
+    ) -> tuple[
+        VaultEntrySummary,
+        ...,
+    ]:
+        """Delete one folder and everything nested inside it."""
+        return core_delete_folder(
+            vault_path=vault.vault_path,
+            keyfile_path=(vault.keyfile_path),
+            password=(vault.password_bytes()),
+            folder_path=folder_path,
         )

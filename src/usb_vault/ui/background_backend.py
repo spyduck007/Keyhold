@@ -13,7 +13,9 @@ from usb_vault.core.errors import (
 from usb_vault.core.vault.operations import (
     VaultEntrySummary,
     add_file as core_add_file,
+    create_folder as core_create_folder,
     delete_file as core_delete_file,
+    delete_folder as core_delete_folder,
     extract_file as core_extract_file,
     list_files as core_list_files,
 )
@@ -120,6 +122,31 @@ class DeleteFileResult:
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class CreateFolderResult:
+    """Created folder marker and the refreshed vault listing."""
+
+    created: VaultEntrySummary
+    entries: tuple[
+        VaultEntrySummary,
+        ...,
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteFolderResult:
+    """Entries removed with a folder and the refreshed vault listing."""
+
+    removed: tuple[
+        VaultEntrySummary,
+        ...,
+    ]
+    entries: tuple[
+        VaultEntrySummary,
+        ...,
+    ]
+
+
 class BackgroundVaultBackend(Protocol):
     """Long-running operations used by the asynchronous window."""
 
@@ -127,6 +154,8 @@ class BackgroundVaultBackend(Protocol):
         self,
         credentials: BackgroundVaultCredentials,
         source_paths: Sequence[Path],
+        *,
+        folder_path: str = "",
     ) -> AddFilesResult:
         """Add files sequentially and refresh the manifest."""
 
@@ -147,6 +176,20 @@ class BackgroundVaultBackend(Protocol):
     ) -> DeleteFileResult:
         """Delete one entry and refresh the manifest."""
 
+    def create_folder(
+        self,
+        credentials: BackgroundVaultCredentials,
+        folder_path: str,
+    ) -> CreateFolderResult:
+        """Create one empty folder and refresh the manifest."""
+
+    def delete_folder(
+        self,
+        credentials: BackgroundVaultCredentials,
+        folder_path: str,
+    ) -> DeleteFolderResult:
+        """Delete one folder and everything nested inside it."""
+
 
 class CoreBackgroundVaultBackend:
     """Production background backend using the streaming core."""
@@ -155,18 +198,23 @@ class CoreBackgroundVaultBackend:
         self,
         credentials: BackgroundVaultCredentials,
         source_paths: Sequence[Path],
+        *,
+        folder_path: str = "",
     ) -> AddFilesResult:
         """Add each source independently and continue after failures."""
         added: list[VaultEntrySummary] = []
         failures: list[FileOperationFailure] = []
 
         for source_path in source_paths:
+            stored_name = f"{folder_path}/{source_path.name}" if folder_path else None
+
             try:
                 result = core_add_file(
                     vault_path=(credentials.vault_path),
                     keyfile_path=(credentials.keyfile_path),
                     password=(credentials.password_bytes()),
                     source_path=(source_path),
+                    stored_name=stored_name,
                 )
             except EXPECTED_OPERATION_ERRORS as error:
                 message = str(error).strip()
@@ -233,5 +281,51 @@ class CoreBackgroundVaultBackend:
 
         return DeleteFileResult(
             deleted=deleted,
+            entries=entries,
+        )
+
+    def create_folder(
+        self,
+        credentials: BackgroundVaultCredentials,
+        folder_path: str,
+    ) -> CreateFolderResult:
+        """Create one empty folder and return refreshed metadata."""
+        created = core_create_folder(
+            vault_path=(credentials.vault_path),
+            keyfile_path=(credentials.keyfile_path),
+            password=(credentials.password_bytes()),
+            folder_path=folder_path,
+        )
+        entries = core_list_files(
+            vault_path=(credentials.vault_path),
+            keyfile_path=(credentials.keyfile_path),
+            password=(credentials.password_bytes()),
+        )
+
+        return CreateFolderResult(
+            created=created,
+            entries=entries,
+        )
+
+    def delete_folder(
+        self,
+        credentials: BackgroundVaultCredentials,
+        folder_path: str,
+    ) -> DeleteFolderResult:
+        """Delete one folder and return refreshed metadata."""
+        removed = core_delete_folder(
+            vault_path=(credentials.vault_path),
+            keyfile_path=(credentials.keyfile_path),
+            password=(credentials.password_bytes()),
+            folder_path=folder_path,
+        )
+        entries = core_list_files(
+            vault_path=(credentials.vault_path),
+            keyfile_path=(credentials.keyfile_path),
+            password=(credentials.password_bytes()),
+        )
+
+        return DeleteFolderResult(
+            removed=removed,
             entries=entries,
         )

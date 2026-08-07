@@ -37,6 +37,7 @@ from usb_vault.ui.recovery_backend import (
 )
 from usb_vault.ui.rename_backend import (
     CoreRenameVaultBackend,
+    MoveFolderResult,
     RenameFileResult,
     RenameVaultBackend,
 )
@@ -99,6 +100,8 @@ class RenameMainWindow(FullyAsyncSecurityMainWindow):
         entry_menu.addAction(self.rename_action)
 
         self.vault_page.table.itemSelectionChanged.connect(self._update_rename_action)
+        self.vault_page.move_requested.connect(self._on_move_requested)
+        self.vault_page.move_folder_requested.connect(self._on_move_folder_requested)
 
         self._update_rename_action()
 
@@ -147,6 +150,54 @@ class RenameMainWindow(FullyAsyncSecurityMainWindow):
             operation=operation,
             succeeded=succeeded,
             status_message=(f"Renaming {stored_name}…"),
+        )
+
+    def start_move_folder(
+        self,
+        folder_path: str,
+        destination_folder_path: str,
+    ) -> bool:
+        """Begin moving one folder and its contents in the background."""
+        if self.is_busy:
+            self._show_busy_message()
+            return False
+
+        active_vault = self._require_vault()
+        credentials = BackgroundVaultCredentials.from_unlocked(active_vault)
+
+        def operation() -> object:
+            return self._rename_backend.move_folder(
+                credentials,
+                folder_path,
+                destination_folder_path,
+            )
+
+        def succeeded(
+            value: object,
+        ) -> None:
+            if not isinstance(
+                value,
+                MoveFolderResult,
+            ):
+                self._show_task_protocol_error(active_vault)
+                return
+
+            if not self._is_current_vault(active_vault):
+                return
+
+            self.vault_page.set_entries(value.entries)
+            destination_label = destination_folder_path or self.vault_page.root_label
+            self.statusBar().showMessage(
+                (f"Moved {folder_path} to {destination_label}."),
+                8_000,
+            )
+
+        return self._start_vault_task(
+            active_vault=active_vault,
+            credentials=credentials,
+            operation=operation,
+            succeeded=succeeded,
+            status_message=(f"Moving {folder_path}…"),
         )
 
     def lock_vault(self) -> None:
@@ -220,4 +271,24 @@ class RenameMainWindow(FullyAsyncSecurityMainWindow):
     ) -> None:
         self.rename_action.setEnabled(
             self.is_unlocked and not self.is_busy and (self.vault_page.selected_name() is not None)
+        )
+
+    def _on_move_requested(
+        self,
+        stored_name: str,
+        new_name: str,
+    ) -> None:
+        self.start_rename_entry(
+            stored_name,
+            new_name,
+        )
+
+    def _on_move_folder_requested(
+        self,
+        folder_path: str,
+        destination_folder_path: str,
+    ) -> None:
+        self.start_move_folder(
+            folder_path,
+            destination_folder_path,
         )

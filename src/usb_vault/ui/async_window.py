@@ -15,6 +15,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFileDialog,
+    QInputDialog,
     QMessageBox,
     QProgressBar,
 )
@@ -31,7 +32,9 @@ from usb_vault.ui.background_backend import (
     BackgroundVaultBackend,
     BackgroundVaultCredentials,
     CoreBackgroundVaultBackend,
+    CreateFolderResult,
     DeleteFileResult,
+    DeleteFolderResult,
 )
 from usb_vault.ui.components import FeedbackStatusBar
 from usb_vault.ui.drop_support import (
@@ -131,11 +134,13 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
 
         active_vault = self._require_vault()
         credentials = BackgroundVaultCredentials.from_unlocked(active_vault)
+        folder_path = self.vault_page.current_folder
 
         def operation() -> object:
             return self._background_backend.add_files(
                 credentials,
                 paths,
+                folder_path=folder_path,
             )
 
         def succeeded(
@@ -260,6 +265,97 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
             status_message=(f"Deleting {stored_name}…"),
         )
 
+    def start_create_folder(
+        self,
+        folder_path: str,
+    ) -> bool:
+        """Begin creating one empty folder in the background."""
+        if self.is_busy:
+            self._show_busy_message()
+            return False
+
+        active_vault = self._require_vault()
+        credentials = BackgroundVaultCredentials.from_unlocked(active_vault)
+
+        def operation() -> object:
+            return self._background_backend.create_folder(
+                credentials,
+                folder_path,
+            )
+
+        def succeeded(
+            value: object,
+        ) -> None:
+            if not isinstance(
+                value,
+                CreateFolderResult,
+            ):
+                self._show_task_protocol_error(active_vault)
+                return
+
+            if not self._is_current_vault(active_vault):
+                return
+
+            self.vault_page.set_entries(value.entries)
+            self.statusBar().showMessage(
+                (f"Created folder {folder_path}."),
+                5_000,
+            )
+
+        return self._start_vault_task(
+            active_vault=active_vault,
+            credentials=credentials,
+            operation=operation,
+            succeeded=succeeded,
+            status_message=(f"Creating folder {folder_path}…"),
+        )
+
+    def start_delete_folder(
+        self,
+        folder_path: str,
+    ) -> bool:
+        """Begin deleting one folder and its contents in the background."""
+        if self.is_busy:
+            self._show_busy_message()
+            return False
+
+        active_vault = self._require_vault()
+        credentials = BackgroundVaultCredentials.from_unlocked(active_vault)
+
+        def operation() -> object:
+            return self._background_backend.delete_folder(
+                credentials,
+                folder_path,
+            )
+
+        def succeeded(
+            value: object,
+        ) -> None:
+            if not isinstance(
+                value,
+                DeleteFolderResult,
+            ):
+                self._show_task_protocol_error(active_vault)
+                return
+
+            if not self._is_current_vault(active_vault):
+                return
+
+            self.vault_page.set_entries(value.entries)
+            noun = "file" if len(value.removed) == 1 else "files"
+            self.statusBar().showMessage(
+                (f"Deleted folder {folder_path} and {len(value.removed)} {noun}."),
+                8_000,
+            )
+
+        return self._start_vault_task(
+            active_vault=active_vault,
+            credentials=credentials,
+            operation=operation,
+            succeeded=succeeded,
+            status_message=(f"Deleting folder {folder_path}…"),
+        )
+
     def dragEnterEvent(
         self,
         event: QDragEnterEvent,
@@ -374,6 +470,36 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
 
         if answer == QMessageBox.StandardButton.Yes:
             self.start_delete_entry(stored_name)
+
+    def _on_create_folder_requested(self) -> None:
+        name, confirmed = QInputDialog.getText(
+            self,
+            "New folder",
+            "Folder name:",
+        )
+        normalized_name = name.strip()
+
+        if not confirmed or not normalized_name:
+            return
+
+        parent = self.vault_page.current_folder
+        folder_path = f"{parent}/{normalized_name}" if parent else normalized_name
+        self.start_create_folder(folder_path)
+
+    def _on_delete_folder_requested(
+        self,
+        folder_path: str,
+    ) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Delete folder?",
+            (f'Delete "{folder_path}" and everything inside it? This cannot be undone.'),
+            (QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No),
+            QMessageBox.StandardButton.No,
+        )
+
+        if answer == QMessageBox.StandardButton.Yes:
+            self.start_delete_folder(folder_path)
 
     def _start_vault_task(
         self,

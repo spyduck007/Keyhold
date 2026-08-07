@@ -20,6 +20,7 @@ from usb_vault.ui.background_backend import (
     BackgroundVaultCredentials,
 )
 from usb_vault.ui.rename_backend import (
+    MoveFolderResult,
     RenameFileResult,
 )
 from usb_vault.ui.rename_window import (
@@ -121,8 +122,7 @@ class FakeRenameBackend:
         new_name: str,
     ) -> RenameFileResult:
         credentials.password_bytes()
-
-        assert stored_name == "old.txt"
+        del stored_name
 
         renamed = VaultEntrySummary(
             name=new_name,
@@ -132,6 +132,28 @@ class FakeRenameBackend:
         return RenameFileResult(
             renamed=renamed,
             entries=(renamed,),
+        )
+
+    def move_folder(
+        self,
+        credentials: (BackgroundVaultCredentials),
+        folder_path: str,
+        destination_folder_path: str,
+    ) -> MoveFolderResult:
+        credentials.password_bytes()
+
+        moved = VaultEntrySummary(
+            name=(
+                f"{destination_folder_path}/{folder_path}/file.bin"
+                if destination_folder_path
+                else f"{folder_path}/file.bin"
+            ),
+            size=12,
+        )
+
+        return MoveFolderResult(
+            moved=(moved,),
+            entries=(moved,),
         )
 
 
@@ -233,3 +255,86 @@ def test_rename_action_tracks_selection(
     window.lock_vault()
 
     assert not (window.rename_action.isEnabled())
+
+
+def test_background_move_folder_updates_browser(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    window = RenameMainWindow(
+        backend=FakeVaultBackend(),
+        rename_backend=(FakeRenameBackend()),
+        session_guard=(_session_guard()),
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+    _activate_vault(
+        window,
+        tmp_path,
+    )
+
+    started = window.start_move_folder(
+        "Documents",
+        "Archive",
+    )
+
+    assert started
+
+    qtbot.waitUntil(
+        lambda: not window.is_busy,
+        timeout=2_000,
+    )
+
+    assert window.statusBar().currentMessage() == ("Moved Documents to Archive.")
+
+
+def test_dragging_a_file_onto_a_folder_triggers_a_background_move(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    window = RenameMainWindow(
+        backend=FakeVaultBackend(),
+        rename_backend=(FakeRenameBackend()),
+        session_guard=(_session_guard()),
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+    _activate_vault(
+        window,
+        tmp_path,
+    )
+
+    window.vault_page.move_requested.emit("old.txt", "Documents/old.txt")
+
+    qtbot.waitUntil(
+        lambda: not window.is_busy,
+        timeout=2_000,
+    )
+
+    assert window.statusBar().currentMessage() == ("Renamed old.txt to Documents/old.txt.")
+
+
+def test_dragging_a_folder_onto_another_folder_triggers_a_background_move(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    window = RenameMainWindow(
+        backend=FakeVaultBackend(),
+        rename_backend=(FakeRenameBackend()),
+        session_guard=(_session_guard()),
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+    _activate_vault(
+        window,
+        tmp_path,
+    )
+
+    window.vault_page.move_folder_requested.emit("Documents", "Archive")
+
+    qtbot.waitUntil(
+        lambda: not window.is_busy,
+        timeout=2_000,
+    )
+
+    assert window.statusBar().currentMessage() == ("Moved Documents to Archive.")

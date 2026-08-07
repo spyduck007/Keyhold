@@ -52,3 +52,32 @@ def test_closing_window_ejects_the_usb_key_used_by_active_session(qtbot: QtBot) 
     assert diskutil.commands == [
         ("/usr/sbin/diskutil", "eject", "/Volumes/Hardware Key"),
     ]
+
+
+def test_panic_close_action_ejects_the_usb_key_and_quits(qtbot: QtBot) -> None:
+    diskutil = FakeDiskutil()
+    ejector = MacOsSessionUsbEjector(
+        platform_name="darwin",
+        command_runner=diskutil,
+    )
+    window = MainWindow(usb_ejector=ejector)
+    qtbot.addWidget(window)
+    window.show()
+    QApplication.processEvents()
+
+    window._activate_vault(
+        UnlockedVault.create(
+            vault_path="/tmp/Private.vault",
+            keyfile_path="/Volumes/Hardware Key/.authkey",
+            password="test password",
+        ),
+        (),
+    )
+
+    assert window.panic_close_action.shortcut().toString() == "Ctrl+Alt+Shift+P"
+    window.panic_close_action.trigger()
+
+    assert not window.isVisible()
+    assert diskutil.commands == [
+        ("/usr/sbin/diskutil", "eject", "/Volumes/Hardware Key"),
+    ]

@@ -14,6 +14,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFileDialog,
+    QInputDialog,
     QMainWindow,
     QMessageBox,
     QWidget,
@@ -113,6 +114,8 @@ class MainWindow(QMainWindow):
         self.vault_page.add_requested.connect(self._on_add_requested)
         self.vault_page.extract_requested.connect(self._on_extract_requested)
         self.vault_page.delete_requested.connect(self._on_delete_requested)
+        self.vault_page.create_folder_requested.connect(self._on_create_folder_requested)
+        self.vault_page.delete_folder_requested.connect(self._on_delete_folder_requested)
         self.vault_page.lock_requested.connect(self.lock_vault)
 
         self._show_unlock_page()
@@ -169,12 +172,16 @@ class MainWindow(QMainWindow):
         self,
         source_path: Path,
     ) -> bool:
-        """Add a selected source file and refresh the browser."""
+        """Add a selected source file into the open folder and refresh the browser."""
+        folder = self.vault_page.current_folder
+        stored_name = f"{folder}/{source_path.name}" if folder else None
+
         try:
             vault = self._require_vault()
             result = self._backend.add_file(
                 vault,
                 source_path,
+                stored_name=stored_name,
             )
         except (
             VaultError,
@@ -284,6 +291,65 @@ class MainWindow(QMainWindow):
         )
         return True
 
+    def create_folder(
+        self,
+        folder_path: str,
+    ) -> bool:
+        """Create one empty folder and refresh the browser."""
+        try:
+            vault = self._require_vault()
+            self._backend.create_folder(
+                vault,
+                folder_path,
+            )
+        except (
+            VaultError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as error:
+            self._show_status_error(str(error))
+            return False
+
+        if not self.refresh_entries():
+            return False
+
+        self.statusBar().showMessage(
+            f"Created folder {folder_path}.",
+            5_000,
+        )
+        return True
+
+    def delete_folder(
+        self,
+        folder_path: str,
+    ) -> bool:
+        """Delete one folder and everything nested inside it."""
+        try:
+            vault = self._require_vault()
+            removed = self._backend.delete_folder(
+                vault,
+                folder_path,
+            )
+        except (
+            VaultError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as error:
+            self._show_status_error(str(error))
+            return False
+
+        if not self.refresh_entries():
+            return False
+
+        noun = "file" if len(removed) == 1 else "files"
+        self.statusBar().showMessage(
+            f"Deleted folder {folder_path} and {len(removed)} {noun}.",
+            8_000,
+        )
+        return True
+
     def lock_vault(self) -> None:
         """Clear credentials and return to the locked screen."""
         if self._vault is not None:
@@ -369,11 +435,26 @@ class MainWindow(QMainWindow):
         self.lock_action.setEnabled(False)
         self.lock_action.triggered.connect(self.lock_vault)
 
+        self.panic_close_action = QAction(
+            "Panic Close (Eject && Quit)",
+            self,
+        )
+        self.panic_close_action.setObjectName("panicCloseAction")
+        self.panic_close_action.setIcon(app_icon("shield", "#e87982"))
+        self.panic_close_action.setShortcut("Ctrl+Shift+Alt+P")
+        self.panic_close_action.setToolTip(
+            "Instantly eject every USB key accessed this session and quit, "
+            "just like closing the window."
+        )
+        self.panic_close_action.triggered.connect(self.close)
+
     def _create_menu(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
         file_menu.addAction(self.new_vault_action)
         file_menu.addSeparator()
         file_menu.addAction(self.lock_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.panic_close_action)
 
     def _on_setup_requested(
         self,
@@ -539,6 +620,36 @@ class MainWindow(QMainWindow):
 
         if answer == QMessageBox.StandardButton.Yes:
             self.delete_entry(stored_name)
+
+    def _on_create_folder_requested(self) -> None:
+        name, confirmed = QInputDialog.getText(
+            self,
+            "New folder",
+            "Folder name:",
+        )
+        normalized_name = name.strip()
+
+        if not confirmed or not normalized_name:
+            return
+
+        parent = self.vault_page.current_folder
+        folder_path = f"{parent}/{normalized_name}" if parent else normalized_name
+        self.create_folder(folder_path)
+
+    def _on_delete_folder_requested(
+        self,
+        folder_path: str,
+    ) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Delete folder?",
+            (f'Delete "{folder_path}" and everything inside it? This cannot be undone.'),
+            (QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No),
+            QMessageBox.StandardButton.No,
+        )
+
+        if answer == QMessageBox.StandardButton.Yes:
+            self.delete_folder(folder_path)
 
     def _show_unlock_page(self) -> None:
         self._pages.setCurrentWidget(self.unlock_page)

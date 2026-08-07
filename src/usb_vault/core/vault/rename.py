@@ -24,6 +24,7 @@ from usb_vault.core.storage.writer import (
     write_vault_container,
 )
 from usb_vault.core.vault.manifest import (
+    FOLDER_MARKER_NAME,
     VaultEntry,
     VaultManifest,
     manifest_associated_data,
@@ -113,6 +114,105 @@ def rename_file(
         return VaultEntrySummary(
             name=renamed_entry.name,
             size=renamed_entry.size,
+        )
+
+
+def move_folder(
+    *,
+    vault_path: str | Path,
+    keyfile_path: str | Path,
+    password: (str | bytes | bytearray | memoryview),
+    folder_path: str,
+    destination_folder_path: str,
+) -> tuple[
+    VaultEntrySummary,
+    ...,
+]:
+    """Move a folder and everything nested inside it, without touching blob data."""
+    normalized_folder = normalize_entry_name(folder_path)
+    normalized_destination = (
+        normalize_entry_name(destination_folder_path) if destination_folder_path else ""
+    )
+    prefix = f"{normalized_folder}/"
+
+    if normalized_destination == normalized_folder or normalized_destination.startswith(prefix):
+        raise VaultOperationError("A folder cannot be moved inside itself.")
+
+    leaf_name = normalized_folder.rsplit("/", 1)[-1]
+    new_folder_path = (
+        f"{normalized_destination}/{leaf_name}" if normalized_destination else leaf_name
+    )
+    new_prefix = f"{new_folder_path}/"
+
+    with unlock_vault(
+        vault_path=vault_path,
+        keyfile_path=keyfile_path,
+        password=password,
+    ) as session:
+        moving = tuple(
+            entry for entry in session.manifest.entries if entry.name.startswith(prefix)
+        )
+
+        if not moving:
+            raise EntryNotFoundError(f"Vault folder not found: {normalized_folder}")
+
+        moving_ids = {entry.entry_id for entry in moving}
+        staying = tuple(
+            entry for entry in session.manifest.entries if entry.entry_id not in moving_ids
+        )
+
+        renamed = tuple(
+            VaultEntry(
+                entry_id=entry.entry_id,
+                blob_id=entry.blob_id,
+                name=f"{new_prefix}{entry.name[len(prefix):]}",
+                size=entry.size,
+            )
+            for entry in moving
+        )
+
+        staying_names = {entry.name.casefold() for entry in staying}
+
+        for entry in renamed:
+            if entry.name.casefold() in staying_names:
+                raise EntryExistsError(f"Vault entry already exists: {entry.name}")
+
+        updated_manifest = VaultManifest(entries=(*staying, *renamed))
+
+        master_key = session.copy_master_key()
+        current_container = read_vault_container(session.vault_path)
+
+        _verify_unchanged_container(
+            container=current_container,
+            expected_header=(session.header),
+            expected_manifest=(session.manifest),
+            master_key=master_key,
+        )
+
+        encrypted_manifest = encrypt_payload(
+            updated_manifest.to_bytes(),
+            master_key,
+            associated_data=(manifest_associated_data(session.header.vault_id)),
+        )
+
+        write_vault_container(
+            session.vault_path,
+            VaultContainer(
+                header=session.header,
+                encrypted_manifest=(encrypted_manifest),
+                blobs=(current_container.blobs),
+                storage_version=(current_container.storage_version),
+            ),
+            overwrite=True,
+        )
+
+        return tuple(
+            VaultEntrySummary(
+                name=entry.name,
+                size=entry.size,
+            )
+            for entry in renamed
+            if not entry.name.endswith(f"/{FOLDER_MARKER_NAME}")
         )
 
 
