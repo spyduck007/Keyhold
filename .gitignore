@@ -17,6 +17,7 @@ venv/
 build/
 dist/
 *.egg-info/
+*.spec
 
 # Editors and macOS
 .DS_Store

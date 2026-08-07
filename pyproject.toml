@@ -22,6 +22,9 @@ dev = [
     "pytest-qt>=4.5,<5",
     "ruff>=0.12.0",
 ]
+packaging = [
+    "pyinstaller>=6.10,<7",
+]
 
 [project.scripts]
 usb-vault = "usb_vault.cli.main:main"
