@@ -98,6 +98,7 @@ class FullyAsyncSecurityMainWindow(AsyncSecurityMainWindow):
 
         self.security_page.clear_sensitive_fields()
         self.security_page.clear_error()
+        self.security_page.set_vault_context(str(self._require_vault().vault_path))
         self._pages.setCurrentWidget(self.security_page)
 
         self._start_security_snapshot(status_message=("Loading vault security settings…"))

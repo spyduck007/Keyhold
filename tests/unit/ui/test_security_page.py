@@ -71,7 +71,7 @@ def test_snapshot_displays_current_and_backup_keys(
             0,
             1,
         )
-        == "Current"
+        == "Connected"
     )
     assert (
         _table_text(
@@ -191,4 +191,4 @@ def test_password_change_requires_exact_keyfile_count(
         Qt.MouseButton.LeftButton,
     )
 
-    assert "Select exactly 1" in page.error_label.text()
+    assert "1 more registered USB key" in page.error_label.text()

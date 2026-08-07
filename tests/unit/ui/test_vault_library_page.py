@@ -135,8 +135,8 @@ def test_missing_vault_card_is_unavailable(
     card = page.card_for_vault_id(VAULT_ID_A)
     assert card is not None
     assert not card.open_button.isEnabled()
-    assert card.rename_button.isEnabled()
-    assert card.remove_button.isEnabled()
+    assert card.rename_action.isEnabled()
+    assert card.remove_action.isEnabled()
 
 
 def test_card_emits_rename_and_remove_requests(
@@ -166,10 +166,7 @@ def test_card_emits_rename_and_remove_requests(
         page.rename_requested,
         timeout=1_000,
     ) as rename_signal:
-        QTest.mouseClick(
-            card.rename_button,
-            Qt.MouseButton.LeftButton,
-        )
+        card.rename_action.trigger()
 
     assert rename_signal.args == [
         VAULT_ID_B,
@@ -179,10 +176,7 @@ def test_card_emits_rename_and_remove_requests(
         page.remove_requested,
         timeout=1_000,
     ) as remove_signal:
-        QTest.mouseClick(
-            card.remove_button,
-            Qt.MouseButton.LeftButton,
-        )
+        card.remove_action.trigger()
 
     assert remove_signal.args == [
         VAULT_ID_B,

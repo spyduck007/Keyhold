@@ -17,10 +17,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.ui.components import FORM_MAX_WIDTH, SPACE_6, PageHeader, ResponsivePage
 from usb_vault.ui.icons import app_icon
 
 
-class RecoveryPage(QWidget):
+class RecoveryPage(ResponsivePage):
     """Collect credentials needed to create a replacement USB key."""
 
     recovery_requested = Signal(
@@ -36,21 +37,13 @@ class RecoveryPage(QWidget):
         self,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__("recoveryPage", max_width=FORM_MAX_WIDTH, parent=parent)
 
-        self.setObjectName("recoveryPage")
-
-        eyebrow = QLabel("RECOVERY")
-        eyebrow.setObjectName("recoveryEyebrow")
-
-        title = QLabel("Restore USB access")
-        title.setObjectName("recoveryPageTitle")
-
-        subtitle = QLabel(
-            "Use the vault password and offline recovery code to create a replacement USB keyfile."
+        header = PageHeader(
+            "RECOVERY",
+            "Restore USB access",
+            "Use your vault password and offline recovery code to register a replacement USB key.",
         )
-        subtitle.setObjectName("pageSubtitle")
-        subtitle.setWordWrap(True)
 
         self.vault_path_edit = QLineEdit()
         self.vault_path_edit.setObjectName("recoveryVaultPathEdit")
@@ -165,7 +158,7 @@ class RecoveryPage(QWidget):
         buttons.addWidget(self.recover_button)
 
         surface = QFrame()
-        surface.setObjectName("formSurface")
+        surface.setObjectName("sectionCard")
         surface_layout = QVBoxLayout(surface)
         surface_layout.setContentsMargins(24, 22, 24, 22)
         surface_layout.setSpacing(12)
@@ -174,16 +167,10 @@ class RecoveryPage(QWidget):
         surface_layout.addWidget(self.error_label)
         surface_layout.addLayout(buttons)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(34, 30, 34, 28)
-        layout.setSpacing(8)
-        layout.addStretch()
-        layout.addWidget(eyebrow)
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addSpacing(12)
-        layout.addWidget(surface)
-        layout.addStretch()
+        self.content_layout.setSpacing(SPACE_6)
+        self.content_layout.addWidget(header)
+        self.content_layout.addWidget(surface)
+        self.content_layout.addStretch()
 
     def show_error(
         self,

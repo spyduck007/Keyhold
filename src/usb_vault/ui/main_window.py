@@ -32,6 +32,7 @@ from usb_vault.ui.backend import (
     UnlockedVault,
     VaultBackend,
 )
+from usb_vault.ui.components import FeedbackStatusBar
 from usb_vault.ui.drop_support import (
     local_regular_file_paths,
 )
@@ -81,6 +82,7 @@ class MainWindow(QMainWindow):
         self.resize(980, 680)
         self.setMinimumSize(760, 520)
         self.setAcceptDrops(True)
+        self.setStatusBar(FeedbackStatusBar(self))
 
         self._backend = backend if backend is not None else CoreVaultBackend()
         self._setup_backend = (
@@ -354,6 +356,7 @@ class MainWindow(QMainWindow):
         )
         self.new_vault_action.setObjectName("newVaultAction")
         self.new_vault_action.setIcon(app_icon("plus"))
+        self.new_vault_action.setShortcut("Ctrl+N")
         self.new_vault_action.triggered.connect(self.show_setup_page)
 
         self.lock_action = QAction(
@@ -362,6 +365,7 @@ class MainWindow(QMainWindow):
         )
         self.lock_action.setObjectName("lockVaultAction")
         self.lock_action.setIcon(app_icon("lock"))
+        self.lock_action.setShortcut("Ctrl+L")
         self.lock_action.setEnabled(False)
         self.lock_action.triggered.connect(self.lock_vault)
 

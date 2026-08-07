@@ -33,6 +33,7 @@ from usb_vault.ui.background_backend import (
     CoreBackgroundVaultBackend,
     DeleteFileResult,
 )
+from usb_vault.ui.components import FeedbackStatusBar
 from usb_vault.ui.drop_support import (
     local_regular_file_paths,
 )
@@ -439,6 +440,9 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
     ) -> None:
         self._pages.setEnabled(not busy)
         self._activity_indicator.setVisible(busy)
+        status_bar = self.statusBar()
+        if isinstance(status_bar, FeedbackStatusBar):
+            status_bar.set_busy(busy)
 
         self.new_vault_action.setEnabled(not busy)
         self.recover_access_action.setEnabled(not busy)

@@ -95,6 +95,40 @@ def app_icon(name: str, color: str = "#dce9f8") -> QIcon:
         painter.drawPath(path)
         painter.drawLine(QPointF(12, 2.5), QPointF(12, 6.5))
         painter.drawLine(QPointF(12, 6.5), QPointF(16, 6.5))
+    elif name == "more":
+        painter.setBrush(QColor(color))
+        for x in (5.5, 10, 14.5):
+            painter.drawEllipse(QPointF(x, 10), 1.1, 1.1)
+    elif name == "chevron_right":
+        painter.drawLine(QPointF(7, 4.5), QPointF(12.5, 10))
+        painter.drawLine(QPointF(12.5, 10), QPointF(7, 15.5))
+    elif name == "check":
+        painter.drawLine(QPointF(3.5, 10), QPointF(8, 14.5))
+        painter.drawLine(QPointF(8, 14.5), QPointF(16.5, 5.5))
+    elif name == "search":
+        painter.drawEllipse(QRectF(3, 3, 10.5, 10.5))
+        painter.drawLine(QPointF(11.2, 11.2), QPointF(17, 17))
+    elif name == "image":
+        painter.drawRoundedRect(QRectF(2.5, 3.5, 15, 13), 2, 2)
+        painter.drawEllipse(QRectF(5, 6, 2.5, 2.5))
+        painter.drawLine(QPointF(4.5, 14), QPointF(9, 10))
+        painter.drawLine(QPointF(9, 10), QPointF(12, 13))
+        painter.drawLine(QPointF(12, 13), QPointF(15, 9.5))
+    elif name == "pdf":
+        path = QPainterPath(QPointF(5, 2.5))
+        path.lineTo(12, 2.5)
+        path.lineTo(16, 6.5)
+        path.lineTo(16, 17.5)
+        path.lineTo(5, 17.5)
+        path.closeSubpath()
+        painter.drawPath(path)
+        painter.setPen(QPen(QColor(color), 1.35))
+        painter.drawText(QRectF(5.2, 8, 10.5, 7), Qt.AlignmentFlag.AlignCenter, "PDF")
+    elif name == "text":
+        painter.drawRoundedRect(QRectF(4, 2.5, 12, 15), 1.5, 1.5)
+        painter.drawLine(QPointF(7, 7), QPointF(13, 7))
+        painter.drawLine(QPointF(7, 10.5), QPointF(13, 10.5))
+        painter.drawLine(QPointF(7, 14), QPointF(11, 14))
     else:
         raise ValueError(f"unknown icon: {name}")
 

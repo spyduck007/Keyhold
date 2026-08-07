@@ -24,6 +24,7 @@ from usb_vault.platform.macos.usb_volumes import (
     MacOsUsbVolumeLocator,
     UsbVolumeLocator,
 )
+from usb_vault.ui.components import FORM_MAX_WIDTH, SPACE_6, PageHeader, ResponsivePage
 from usb_vault.ui.icons import app_icon
 
 DEFAULT_USB_KEYFILE_NAME = ".authkey"
@@ -62,7 +63,7 @@ class UsbVolumeComboBox(QComboBox):
         painter.end()
 
 
-class SetupPage(QWidget):
+class SetupPage(ResponsivePage):
     """Collect locations and a password for a new vault."""
 
     setup_requested = Signal(
@@ -78,26 +79,18 @@ class SetupPage(QWidget):
         *,
         usb_volume_locator: UsbVolumeLocator | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__("setupPage", max_width=FORM_MAX_WIDTH, parent=parent)
 
         self._usb_volume_locator = (
             usb_volume_locator if usb_volume_locator is not None else MacOsUsbVolumeLocator()
         )
 
-        self.setObjectName("setupPage")
-
-        eyebrow = QLabel("NEW VAULT")
-        eyebrow.setObjectName("setupEyebrow")
-
-        title = QLabel("Create a vault")
-        title.setObjectName("setupTitle")
-
-        subtitle = QLabel(
+        header = PageHeader(
+            "NEW VAULT",
+            "Create a vault",
             "Choose a location for the encrypted vault, then select the USB that will hold "
-            "its hardware key."
+            "its hardware key.",
         )
-        subtitle.setObjectName("pageSubtitle")
-        subtitle.setWordWrap(True)
 
         self.vault_path_edit = QLineEdit()
         self.vault_path_edit.setObjectName("newVaultPathEdit")
@@ -195,7 +188,7 @@ class SetupPage(QWidget):
         buttons.addWidget(self.create_button)
 
         surface = QFrame()
-        surface.setObjectName("formSurface")
+        surface.setObjectName("sectionCard")
         surface_layout = QVBoxLayout(surface)
         surface_layout.setContentsMargins(24, 22, 24, 22)
         surface_layout.setSpacing(12)
@@ -203,16 +196,10 @@ class SetupPage(QWidget):
         surface_layout.addWidget(self.error_label)
         surface_layout.addLayout(buttons)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(34, 30, 34, 28)
-        layout.setSpacing(8)
-        layout.addStretch()
-        layout.addWidget(eyebrow)
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addSpacing(12)
-        layout.addWidget(surface)
-        layout.addStretch()
+        self.content_layout.setSpacing(SPACE_6)
+        self.content_layout.addWidget(header)
+        self.content_layout.addWidget(surface)
+        self.content_layout.addStretch()
 
         self.refresh_usb_volumes()
 
@@ -313,9 +300,7 @@ class SetupPage(QWidget):
 
         if selected_path is not None:
             selected_index = self.usb_volume_combo.findData(str(selected_path))
-            self.usb_volume_combo.setCurrentIndex(
-                selected_index if selected_index >= 0 else 0
-            )
+            self.usb_volume_combo.setCurrentIndex(selected_index if selected_index >= 0 else 0)
         else:
             self.usb_volume_combo.setCurrentIndex(0)
 
@@ -330,9 +315,7 @@ class SetupPage(QWidget):
     def _update_keyfile_path(self) -> None:
         selected_path = self._selected_usb_volume_path()
         keyfile_path = (
-            selected_path / DEFAULT_USB_KEYFILE_NAME
-            if selected_path is not None
-            else None
+            selected_path / DEFAULT_USB_KEYFILE_NAME if selected_path is not None else None
         )
         self.keyfile_path_edit.setText(str(keyfile_path) if keyfile_path is not None else "")
 

@@ -42,13 +42,13 @@ class AnimatedStackedWidget(QStackedWidget):
         widget.raise_()
 
         outgoing_animation = QPropertyAnimation(current, b"pos", self)
-        outgoing_animation.setDuration(320)
+        outgoing_animation.setDuration(220)
         outgoing_animation.setStartValue(QPoint(0, 0))
         outgoing_animation.setEndValue(QPoint(-direction * distance, 0))
         outgoing_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
 
         incoming_animation = QPropertyAnimation(widget, b"pos", self)
-        incoming_animation.setDuration(320)
+        incoming_animation.setDuration(220)
         incoming_animation.setStartValue(QPoint(direction * distance, 0))
         incoming_animation.setEndValue(QPoint(0, 0))
         incoming_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
