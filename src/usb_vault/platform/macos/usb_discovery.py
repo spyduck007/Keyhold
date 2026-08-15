@@ -1,4 +1,4 @@
-"""Discover registered USB Vault keyfiles on mounted macOS volumes."""
+"""Discover registered Keyhold keyfiles on mounted macOS volumes."""
 
 from __future__ import annotations
 

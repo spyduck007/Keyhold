@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from usb_vault.ui.automatic_unlock_window import (
     AutomaticUnlockMainWindow,
 )
+from usb_vault.ui.branding import APP_NAME
 from usb_vault.ui.session_guard import (
     DEFAULT_IDLE_TIMEOUT_MS,
     DEFAULT_USB_POLL_INTERVAL_MS,
@@ -35,15 +36,15 @@ USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Launch the complete USB Vault MVP application."""
+    """Launch the complete Keyhold desktop application."""
     if QApplication.instance() is not None:
         raise RuntimeError("a QApplication already exists")
 
     arguments = list(argv) if argv is not None else sys.argv
 
     application = QApplication(arguments)
-    application.setApplicationName("USB Vault")
-    application.setOrganizationName("USB Vault")
+    application.setApplicationName(APP_NAME)
+    application.setOrganizationName(APP_NAME)
     apply_application_theme(application)
 
     session_guard = UsbGraceSessionGuard(

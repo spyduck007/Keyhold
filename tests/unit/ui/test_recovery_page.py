@@ -1,5 +1,7 @@
 """Tests for the desktop recovery page."""
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
@@ -12,6 +14,13 @@ from usb_vault.ui.pages.recovery_page import (
 )
 
 RECOVERY_CODE = "UVR1-AAAA-BBBB-CCCC-DDDD"
+
+
+class FakeUsbVolumeLocator:
+    """Return deterministic mounted USB roots."""
+
+    def external_usb_volumes(self) -> tuple[Path, ...]:
+        return (Path("/Volumes/Recovery Key"),)
 
 
 def _show_page(
@@ -60,6 +69,19 @@ def test_previous_keys_are_revoked_by_default(
     _show_page(page)
 
     assert page.replace_existing_keys_checkbox.isChecked()
+
+
+def test_recovery_selects_usb_without_a_keyfile_dialog(
+    qtbot: QtBot,
+) -> None:
+    page = RecoveryPage(usb_volume_locator=FakeUsbVolumeLocator())
+    qtbot.addWidget(page)
+    _show_page(page)
+
+    page.usb_volume_combo.setCurrentIndex(1)
+
+    assert page.new_keyfile_path_edit.isReadOnly()
+    assert page.new_keyfile_path_edit.text() == "/Volumes/Recovery Key/.authkey"
 
 
 def test_recovery_page_rejects_mismatched_passwords(

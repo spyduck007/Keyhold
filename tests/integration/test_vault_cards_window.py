@@ -317,7 +317,7 @@ def test_add_existing_opens_selected_vault_for_unlock(
 
         return (
             str(selected_vault),
-            ("USB Vault files (*.vault)"),
+            ("Keyhold vaults (*.vault)"),
         )
 
     monkeypatch.setattr(

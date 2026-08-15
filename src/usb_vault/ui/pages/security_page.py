@@ -7,13 +7,13 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
     QScrollArea,
     QTableWidget,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.platform.macos.usb_volumes import UsbVolumeLocator
 from usb_vault.ui.components import (
     CONTENT_MAX_WIDTH,
     SPACE_1,
@@ -35,6 +36,7 @@ from usb_vault.ui.components import (
 )
 from usb_vault.ui.icons import app_icon
 from usb_vault.ui.security_backend import SecuritySnapshot
+from usb_vault.ui.usb_volume_selector import UsbVolumeSelector
 
 
 class MaskedRecoveryCodeEdit(QLineEdit):
@@ -56,11 +58,17 @@ class SecurityPage(QWidget):
     password_change_requested = Signal(str, str, object, str)
     close_requested = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        usb_volume_locator: UsbVolumeLocator | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("securityPage")
         self._additional_keyfile_count = 0
         self._recovery_required = False
+        self._usb_volume_locator = usb_volume_locator
 
         responsive = ResponsivePage("securityContent", max_width=CONTENT_MAX_WIDTH)
         self.header = PageHeader(
@@ -166,6 +174,9 @@ class SecurityPage(QWidget):
         self.additional_keys_widget.setVisible(needs_additional_keys)
 
         self.recovery_widget.setVisible(self._recovery_required)
+        self.backup_usb_selector.refresh_volumes()
+        self.backup_usb_selector.clear_selection()
+        self.additional_usb_selector.refresh_volumes()
         self.keys_table.clearSelection()
         self._update_revoke_button()
 
@@ -183,17 +194,23 @@ class SecurityPage(QWidget):
         self.confirmation_edit.clear()
         self.recovery_code_edit.clear()
         self.additional_keyfiles_list.clear()
+        self.additional_usb_selector.clear_selection()
         self.show_passwords_checkbox.setChecked(False)
         self.show_recovery_checkbox.setChecked(False)
 
     def add_password_keyfile_path(self, path: str | Path) -> None:
         normalized = str(Path(path))
         existing = {
-            self.additional_keyfiles_list.item(index).text()
+            self.additional_keyfiles_list.item(index).data(Qt.ItemDataRole.UserRole)
             for index in range(self.additional_keyfiles_list.count())
         }
         if normalized not in existing:
-            self.additional_keyfiles_list.addItem(normalized)
+            keyfile_path = Path(normalized)
+            volume_name = keyfile_path.parent.name or "External USB"
+            item = QListWidgetItem(volume_name)
+            item.setData(Qt.ItemDataRole.UserRole, normalized)
+            item.setToolTip(f"Uses {keyfile_path.name} at the root of {volume_name}")
+            self.additional_keyfiles_list.addItem(item)
 
     def selected_key_id_hex(self) -> str | None:
         selected_rows = self.keys_table.selectionModel().selectedRows()
@@ -230,7 +247,7 @@ class SecurityPage(QWidget):
         )
         self.keys_table.itemSelectionChanged.connect(self._update_revoke_button)
 
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton("Reload keys")
         self.refresh_button.setObjectName("refreshSecurityButton")
         self.refresh_button.setIcon(app_icon("refresh"))
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
@@ -238,6 +255,12 @@ class SecurityPage(QWidget):
         self.add_key_button.setObjectName("addSecurityKeyButton")
         self.add_key_button.setIcon(app_icon("key"))
         self.add_key_button.clicked.connect(self._choose_new_keyfile)
+        self.backup_usb_selector = UsbVolumeSelector(
+            usb_volume_locator=self._usb_volume_locator,
+            placeholder="Select a USB for the backup key",
+        )
+        self.backup_usb_selector.combo.setObjectName("backupUsbVolumeComboBox")
+        self.backup_usb_selector.refresh_button.setObjectName("refreshBackupUsbVolumesButton")
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(SPACE_2)
@@ -270,6 +293,7 @@ class SecurityPage(QWidget):
 
         section.addWidget(self.key_count_label)
         section.addWidget(self.keys_table)
+        section.addWidget(self.backup_usb_selector)
         section.addLayout(actions)
         section.addWidget(danger_zone)
         return section
@@ -327,18 +351,25 @@ class SecurityPage(QWidget):
         self.additional_keyfiles_list = QListWidget()
         self.additional_keyfiles_list.setObjectName("additionalPasswordKeyfilesList")
         self.additional_keyfiles_list.setMaximumHeight(112)
-        add_existing_button = QPushButton("Select connected USB keys…")
-        add_existing_button.setObjectName("selectPasswordKeyfilesButton")
-        add_existing_button.setIcon(app_icon("folder"))
-        add_existing_button.clicked.connect(self._choose_additional_keyfiles)
+        self.additional_usb_selector = UsbVolumeSelector(
+            usb_volume_locator=self._usb_volume_locator,
+            placeholder="Select another registered USB",
+        )
+        self.additional_usb_selector.combo.setObjectName("passwordUsbVolumeComboBox")
+        self.additional_usb_selector.refresh_button.setObjectName("refreshPasswordUsbVolumesButton")
+        self.add_password_usb_button = QPushButton("Add selected USB")
+        self.add_password_usb_button.setObjectName("selectPasswordKeyfilesButton")
+        self.add_password_usb_button.setIcon(app_icon("plus"))
+        self.add_password_usb_button.clicked.connect(self._choose_additional_keyfiles)
         remove_existing_button = QPushButton("Remove selection")
         remove_existing_button.setObjectName("removePasswordKeyfileButton")
         remove_existing_button.clicked.connect(self._remove_selected_keyfile)
         keyfile_buttons = QHBoxLayout()
-        keyfile_buttons.addWidget(add_existing_button)
+        keyfile_buttons.addWidget(self.add_password_usb_button)
         keyfile_buttons.addWidget(remove_existing_button)
         keyfile_buttons.addStretch()
         additional_layout.addWidget(self.additional_keys_label)
+        additional_layout.addWidget(self.additional_usb_selector)
         additional_layout.addWidget(self.additional_keyfiles_list)
         additional_layout.addLayout(keyfile_buttons)
         self.additional_keys_widget.hide()
@@ -372,7 +403,7 @@ class SecurityPage(QWidget):
 
         self.change_password_button = QPushButton("Change password")
         self.change_password_button.setObjectName("changeSecurityPasswordButton")
-        self.change_password_button.setIcon(app_icon("key", "#09201f"))
+        self.change_password_button.setIcon(app_icon("key", "#181818"))
         self.change_password_button.clicked.connect(self._emit_password_change)
 
         section.addLayout(password_form)
@@ -390,14 +421,12 @@ class SecurityPage(QWidget):
         return field
 
     def _choose_new_keyfile(self) -> None:
-        selected_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Add backup USB key",
-            "",
-            "USB Vault keys (*.authkey);;All files (*)",
-        )
-        if selected_path:
-            self.add_key_requested.emit(selected_path)
+        keyfile_path = self.backup_usb_selector.keyfile_path
+        if keyfile_path is None:
+            self.show_error("Select the USB that will hold the backup key.")
+            return
+        self.clear_error()
+        self.add_key_requested.emit(str(keyfile_path))
 
     def _emit_revoke(self) -> None:
         key_id_hex = self.selected_key_id_hex()
@@ -405,14 +434,13 @@ class SecurityPage(QWidget):
             self.revoke_key_requested.emit(key_id_hex)
 
     def _choose_additional_keyfiles(self) -> None:
-        selected_paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select every other registered USB key",
-            "",
-            "USB Vault keys (*.authkey);;All files (*)",
-        )
-        for selected_path in selected_paths:
-            self.add_password_keyfile_path(selected_path)
+        keyfile_path = self.additional_usb_selector.keyfile_path
+        if keyfile_path is None:
+            self.show_error("Select a connected registered USB key.")
+            return
+        self.clear_error()
+        self.add_password_keyfile_path(keyfile_path)
+        self.additional_usb_selector.clear_selection()
 
     def _remove_selected_keyfile(self) -> None:
         selected_rows = sorted(
@@ -428,7 +456,7 @@ class SecurityPage(QWidget):
         confirmation = self.confirmation_edit.text()
         recovery_code = self.recovery_code_edit.toPlainText().strip()
         additional_paths = tuple(
-            self.additional_keyfiles_list.item(index).text()
+            str(self.additional_keyfiles_list.item(index).data(Qt.ItemDataRole.UserRole))
             for index in range(self.additional_keyfiles_list.count())
         )
         if not current_password:

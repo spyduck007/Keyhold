@@ -220,6 +220,7 @@ class VaultPage(ResponsivePage):
     add_requested = Signal()
     extract_requested = Signal(str)
     delete_requested = Signal(str)
+    rename_requested = Signal()
     create_folder_requested = Signal()
     delete_folder_requested = Signal(str)
     move_requested = Signal(str, str)
@@ -280,7 +281,7 @@ class VaultPage(ResponsivePage):
 
         self.add_button = QPushButton("Add files")
         self.add_button.setObjectName("addFileButton")
-        self.add_button.setIcon(app_icon("plus", "#09201f"))
+        self.add_button.setIcon(app_icon("plus", "#181818"))
         self.add_button.clicked.connect(self.add_requested.emit)
         self.new_folder_button = QPushButton("New folder")
         self.new_folder_button.setObjectName("newFolderButton")
@@ -291,6 +292,12 @@ class VaultPage(ResponsivePage):
         self.extract_button.setIcon(app_icon("download"))
         self.extract_button.setEnabled(False)
         self.extract_button.clicked.connect(self._emit_extract)
+        self.rename_button = QPushButton("Rename")
+        self.rename_button.setObjectName("renameFileButton")
+        self.rename_button.setIcon(app_icon("edit"))
+        self.rename_button.setEnabled(False)
+        self.rename_button.setToolTip("Rename the selected encrypted file (F2)")
+        self.rename_button.clicked.connect(self.rename_requested.emit)
         self.delete_button = QPushButton("Delete file")
         self.delete_button.setObjectName("deleteFileButton")
         self.delete_button.setIcon(app_icon("trash", "#f199a1"))
@@ -321,6 +328,7 @@ class VaultPage(ResponsivePage):
         toolbar_layout.addWidget(self.add_button)
         toolbar_layout.addWidget(self.new_folder_button)
         toolbar_layout.addWidget(self.extract_button)
+        toolbar_layout.addWidget(self.rename_button)
         toolbar_layout.addWidget(self.delete_button)
         toolbar_layout.addWidget(self.selection_label)
         toolbar_layout.addStretch()
@@ -328,7 +336,7 @@ class VaultPage(ResponsivePage):
         toolbar_layout.addWidget(self.entry_count_label)
 
         self.empty_icon = QLabel()
-        self.empty_icon.setPixmap(app_icon("file", "#61d7c5").pixmap(44, 44))
+        self.empty_icon.setPixmap(app_icon("file", "#bdbdbd").pixmap(40, 40))
         self.empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_title = QLabel("This vault is empty")
         self.empty_title.setObjectName("emptyStateTitle")
@@ -341,7 +349,7 @@ class VaultPage(ResponsivePage):
         self.empty_description.setWordWrap(True)
         empty_add = QPushButton("Add files")
         empty_add.setObjectName("primaryButton")
-        empty_add.setIcon(app_icon("plus", "#09201f"))
+        empty_add.setIcon(app_icon("plus", "#181818"))
         empty_add.clicked.connect(self.add_requested.emit)
         empty_new_folder = QPushButton("New folder")
         empty_new_folder.setIcon(app_icon("folder"))
@@ -390,7 +398,8 @@ class VaultPage(ResponsivePage):
         self.content_layout.addWidget(self.header)
         self.content_layout.addWidget(self.breadcrumb_bar)
         self.content_layout.addWidget(toolbar)
-        self.content_layout.addWidget(table_surface, 1)
+        self.content_layout.addWidget(table_surface)
+        self.content_layout.addStretch()
 
         self.table.itemSelectionChanged.connect(self._update_selection_actions)
         self.table.itemDoubleClicked.connect(self._on_row_activated)
@@ -456,7 +465,7 @@ class VaultPage(ResponsivePage):
             name_item = _RowItem(
                 folder_name,
                 is_folder=True,
-                icon=app_icon("folder", "#61d7c5"),
+                icon=app_icon("folder", "#c2c2c2"),
             )
             name_item.setData(Qt.ItemDataRole.UserRole, ("folder", full_path))
             size_item = _RowItem(f"{item_count} {noun}", is_folder=True)
@@ -477,7 +486,7 @@ class VaultPage(ResponsivePage):
             name_item = _RowItem(
                 display_name,
                 is_folder=False,
-                icon=app_icon(icon_name, "#9fb4cc"),
+                icon=app_icon(icon_name, "#a8a8a8"),
             )
             name_item.setData(Qt.ItemDataRole.UserRole, ("file", entry.name))
             size_item = _RowItem(format_file_size(entry.size), is_folder=False)
@@ -503,9 +512,7 @@ class VaultPage(ResponsivePage):
 
         if self._path:
             self.empty_title.setText("This folder is empty")
-            self.empty_description.setText(
-                "Add files or create another folder inside this one."
-            )
+            self.empty_description.setText("Add files or create another folder inside this one.")
         else:
             self.empty_title.setText("This vault is empty")
             self.empty_description.setText(
@@ -576,7 +583,7 @@ class VaultPage(ResponsivePage):
 
         for index in range(len(self._path)):
             chevron = QLabel()
-            chevron.setPixmap(app_icon("chevron_right", "#5a6f89").pixmap(12, 12))
+            chevron.setPixmap(app_icon("chevron_right", "#666666").pixmap(12, 12))
             self._breadcrumb_layout.addWidget(chevron)
             self._add_breadcrumb_segment(self._path[index], self._path[: index + 1])
 
@@ -598,9 +605,7 @@ class VaultPage(ResponsivePage):
         )
         button.clicked.connect(lambda _checked=False, target=path: self._navigate_to(target))
         button.entry_dropped.connect(
-            lambda kind, identifier, target=target_path: self._handle_drop(
-                kind, identifier, target
-            )
+            lambda kind, identifier, target=target_path: self._handle_drop(kind, identifier, target)
         )
         self._breadcrumb_layout.addWidget(button)
 
@@ -642,6 +647,7 @@ class VaultPage(ResponsivePage):
         is_folder = kind == "folder"
 
         self.extract_button.setEnabled(is_file)
+        self.rename_button.setEnabled(is_file)
         self.delete_button.setEnabled(is_file or is_folder)
         self.delete_button.setText("Delete folder" if is_folder else "Delete file")
 

@@ -88,6 +88,17 @@ class SecurityMainWindow(RecoveryMainWindow):
         self.security_action.setEnabled(False)
         self.security_action.triggered.connect(self.show_security_page)
 
+        self.sidebar.add_item(
+            "security",
+            "Security",
+            app_icon("key", "#c6c6c6"),
+            self.security_action.trigger,
+            group="access",
+            enabled=False,
+        )
+        self._bind_sidebar_action("security", self.security_action)
+        self._register_page_navigation(self.security_page, "security")
+
         security_menu = self.menuBar().addMenu("&Security")
         security_menu.addAction(self.security_action)
 

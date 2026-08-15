@@ -1,5 +1,7 @@
 """Tests for the desktop Security Center page."""
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
@@ -20,6 +22,16 @@ from usb_vault.ui.security_backend import (
 CURRENT_KEY_ID = b"A" * 16
 BACKUP_KEY_ID = b"B" * 16
 RECOVERY_CODE = "UVR1-AAAA-BBBB-CCCC-DDDD"
+
+
+class FakeUsbVolumeLocator:
+    """Return deterministic mounted USB roots."""
+
+    def external_usb_volumes(self) -> tuple[Path, ...]:
+        return (
+            Path("/Volumes/Backup Key"),
+            Path("/Volumes/Travel Key"),
+        )
 
 
 def _show_page(
@@ -158,6 +170,35 @@ def test_password_change_emits_complete_request(
         ("/Volumes/Backup/.authkey",),
         RECOVERY_CODE,
     ]
+
+
+def test_backup_registration_uses_selected_usb_root(
+    qtbot: QtBot,
+) -> None:
+    page = SecurityPage(usb_volume_locator=FakeUsbVolumeLocator())
+    qtbot.addWidget(page)
+    _show_page(page)
+    page.backup_usb_selector.combo.setCurrentIndex(1)
+
+    with qtbot.waitSignal(page.add_key_requested, timeout=1_000) as signal:
+        QTest.mouseClick(page.add_key_button, Qt.MouseButton.LeftButton)
+
+    assert signal.args == ["/Volumes/Backup Key/.authkey"]
+
+
+def test_password_rotation_adds_selected_registered_usb(
+    qtbot: QtBot,
+) -> None:
+    page = SecurityPage(usb_volume_locator=FakeUsbVolumeLocator())
+    qtbot.addWidget(page)
+    _show_page(page)
+    page.additional_usb_selector.combo.setCurrentIndex(2)
+
+    QTest.mouseClick(page.add_password_usb_button, Qt.MouseButton.LeftButton)
+
+    item = page.additional_keyfiles_list.item(0)
+    assert item.text() == "Travel Key"
+    assert item.data(Qt.ItemDataRole.UserRole) == "/Volumes/Travel Key/.authkey"
 
 
 def test_password_change_requires_exact_keyfile_count(

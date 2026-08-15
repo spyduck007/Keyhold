@@ -1,6 +1,8 @@
-"""Reusable visual primitives for the USB Vault desktop interface."""
+"""Reusable visual primitives for the Keyhold desktop interface."""
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 from PySide6.QtCore import (
     Property,
@@ -12,7 +14,7 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
 )
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPaintEvent, QResizeEvent
+from PySide6.QtGui import QColor, QFontMetrics, QIcon, QPainter, QPaintEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -20,14 +22,17 @@ from PySide6.QtWidgets import (
     QLabel,
     QLayout,
     QProgressBar,
+    QPushButton,
     QSizePolicy,
     QStatusBar,
     QVBoxLayout,
     QWidget,
 )
 
-CONTENT_MAX_WIDTH = 1_360
-FORM_MAX_WIDTH = 680
+from usb_vault.ui.branding import APP_NAME, APP_TAGLINE
+
+CONTENT_MAX_WIDTH = 1_180
+FORM_MAX_WIDTH = 700
 AUTH_PANEL_MAX_WIDTH = 620
 
 SPACE_1 = 4
@@ -96,6 +101,134 @@ class ResponsivePage(QWidget):
             horizontal,
             vertical,
         )
+
+
+class AppSidebar(QFrame):
+    """Persistent navigation for the app's existing workflows."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("appSidebar")
+        self.setFixedWidth(224)
+        self._buttons: dict[str, QPushButton] = {}
+        self._requested_enabled: dict[str, bool] = {}
+        self._busy = False
+
+        self.brand_icon = QLabel()
+        self.brand_icon.setObjectName("sidebarBrandIcon")
+        self.brand_icon.setFixedSize(32, 32)
+
+        brand_name = QLabel(APP_NAME)
+        brand_name.setObjectName("sidebarBrandName")
+        brand_detail = QLabel(APP_TAGLINE)
+        brand_detail.setObjectName("sidebarBrandDetail")
+        brand_copy = QVBoxLayout()
+        brand_copy.setContentsMargins(0, 0, 0, 0)
+        brand_copy.setSpacing(0)
+        brand_copy.addWidget(brand_name)
+        brand_copy.addWidget(brand_detail)
+        brand = QHBoxLayout()
+        brand.setContentsMargins(0, 0, 0, 0)
+        brand.setSpacing(SPACE_3)
+        brand.addWidget(self.brand_icon)
+        brand.addLayout(brand_copy, 1)
+
+        self._groups: dict[str, QVBoxLayout] = {}
+        navigation = QVBoxLayout()
+        navigation.setContentsMargins(0, 0, 0, 0)
+        navigation.setSpacing(SPACE_6)
+        for key, label in (
+            ("vaults", "VAULTS"),
+            ("access", "ACCESS"),
+            ("session", "SESSION"),
+        ):
+            group_label = QLabel(label)
+            group_label.setObjectName("sidebarSectionLabel")
+            group_layout = QVBoxLayout()
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(SPACE_1)
+            group_layout.addWidget(group_label)
+            self._groups[key] = group_layout
+            navigation.addLayout(group_layout)
+
+        self.session_name = QLabel("No vault open")
+        self.session_name.setObjectName("sidebarSessionName")
+        self.session_state = QLabel("Locked")
+        self.session_state.setObjectName("sidebarSessionState")
+
+        session_card = QFrame()
+        session_card.setObjectName("sidebarSessionCard")
+        session_layout = QVBoxLayout(session_card)
+        session_layout.setContentsMargins(SPACE_3, SPACE_3, SPACE_3, SPACE_3)
+        session_layout.setSpacing(SPACE_1)
+        session_layout.addWidget(self.session_name)
+        session_layout.addWidget(self.session_state)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(SPACE_4, SPACE_6, SPACE_4, SPACE_4)
+        layout.setSpacing(SPACE_8)
+        layout.addLayout(brand)
+        layout.addLayout(navigation)
+        layout.addStretch()
+        layout.addWidget(session_card)
+
+    def set_brand_icon(self, icon: QIcon) -> None:
+        self.brand_icon.setPixmap(icon.pixmap(26, 26))
+
+    def add_item(
+        self,
+        key: str,
+        label: str,
+        icon: QIcon,
+        callback: Callable[[], None],
+        *,
+        group: str,
+        enabled: bool = True,
+    ) -> QPushButton:
+        if key in self._buttons:
+            raise ValueError(f"sidebar item already exists: {key}")
+        if group not in self._groups:
+            raise ValueError(f"unknown sidebar group: {group}")
+
+        button = QPushButton(label)
+        button.setObjectName("sidebarNavButton")
+        button.setProperty("active", False)
+        button.setIcon(icon)
+        button.setCheckable(False)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(callback)
+        button.setEnabled(enabled)
+        self._groups[group].addWidget(button)
+        self._buttons[key] = button
+        self._requested_enabled[key] = enabled
+        return button
+
+    def set_active(self, key: str | None) -> None:
+        for item_key, button in self._buttons.items():
+            button.setProperty("active", item_key == key)
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+    def item_button(self, key: str) -> QPushButton | None:
+        return self._buttons.get(key)
+
+    def set_item_enabled(self, key: str, enabled: bool) -> None:
+        button = self._buttons.get(key)
+        if button is None:
+            return
+        self._requested_enabled[key] = enabled
+        button.setEnabled(enabled and (not self._busy or key in {"lock", "quit"}))
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        for key, button in self._buttons.items():
+            requested = self._requested_enabled.get(key, True)
+            button.setEnabled(requested and (not busy or key in {"lock", "quit"}))
+
+    def set_session(self, name: str, state: str) -> None:
+        self.session_name.setText(name)
+        self.session_name.setToolTip(name)
+        self.session_state.setText(state)
 
 
 def form_label(text: str) -> QLabel:
@@ -325,12 +458,12 @@ class ScanningBar(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         track = QRectF(0, 1, self.width(), 4)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#1b2b40"))
+        painter.setBrush(QColor("#343434"))
         painter.drawRoundedRect(track, 2, 2)
 
         segment_width = self.width() * 0.28
         left = (self.width() - segment_width) * self._position
-        painter.setBrush(QColor("#4fc8b5"))
+        painter.setBrush(QColor("#c8c8c8"))
         painter.drawRoundedRect(QRectF(left, 1, segment_width, 4), 2, 2)
         painter.end()
 
@@ -340,7 +473,7 @@ class ToastBanner(QFrame):
 
     MIN_WIDTH = 220
     MAX_WIDTH = 520
-    TOP_OFFSET = 16
+    EDGE_OFFSET = 18
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -422,8 +555,9 @@ class ToastBanner(QFrame):
         parent = self.parentWidget()
         if parent is None:
             return
-        x = max(SPACE_4, (parent.width() - self.width()) // 2)
-        self.move(x, self.TOP_OFFSET)
+        x = max(SPACE_4, parent.width() - self.width() - self.EDGE_OFFSET)
+        y = max(SPACE_4, parent.height() - self.height() - self.EDGE_OFFSET)
+        self.move(x, y)
 
 
 class FeedbackStatusBar(QStatusBar):

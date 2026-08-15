@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.platform.macos.usb_volumes import UsbVolumeLocator
 from usb_vault.ui.components import (
     FORM_MAX_WIDTH,
     SPACE_6,
@@ -25,6 +26,7 @@ from usb_vault.ui.components import (
     form_label,
 )
 from usb_vault.ui.icons import app_icon
+from usb_vault.ui.usb_volume_selector import UsbVolumeSelector
 
 
 class RecoveryPage(ResponsivePage):
@@ -42,11 +44,12 @@ class RecoveryPage(ResponsivePage):
     def __init__(
         self,
         parent: QWidget | None = None,
+        *,
+        usb_volume_locator: UsbVolumeLocator | None = None,
     ) -> None:
         super().__init__(
             "recoveryPage",
             max_width=FORM_MAX_WIDTH,
-            center_vertically=True,
             parent=parent,
         )
 
@@ -62,7 +65,17 @@ class RecoveryPage(ResponsivePage):
 
         self.new_keyfile_path_edit = QLineEdit()
         self.new_keyfile_path_edit.setObjectName("recoveryNewKeyfilePathEdit")
-        self.new_keyfile_path_edit.setPlaceholderText("Choose a path on the replacement USB")
+        self.new_keyfile_path_edit.setReadOnly(True)
+        self.new_keyfile_path_edit.setPlaceholderText("Select a replacement USB to create .authkey")
+
+        self.usb_volume_selector = UsbVolumeSelector(
+            usb_volume_locator=usb_volume_locator,
+            placeholder="Select a replacement USB",
+        )
+        self.usb_volume_combo = self.usb_volume_selector.combo
+        self.usb_volume_combo.setObjectName("recoveryUsbVolumeComboBox")
+        self.usb_volume_selector.refresh_button.setObjectName("refreshRecoveryUsbVolumesButton")
+        self.usb_volume_selector.keyfile_path_changed.connect(self.new_keyfile_path_edit.setText)
 
         self.password_edit = QLineEdit()
         self.password_edit.setObjectName("recoveryPasswordEdit")
@@ -95,18 +108,9 @@ class RecoveryPage(ResponsivePage):
         vault_browse_button.setIcon(app_icon("folder"))
         vault_browse_button.clicked.connect(self._browse_vault)
 
-        keyfile_browse_button = QPushButton("Browse…")
-        keyfile_browse_button.setObjectName("browseRecoveryKeyfileButton")
-        keyfile_browse_button.setIcon(app_icon("key"))
-        keyfile_browse_button.clicked.connect(self._browse_new_keyfile)
-
         vault_row = QHBoxLayout()
         vault_row.addWidget(self.vault_path_edit, 1)
         vault_row.addWidget(vault_browse_button, 0)
-
-        keyfile_row = QHBoxLayout()
-        keyfile_row.addWidget(self.new_keyfile_path_edit, 1)
-        keyfile_row.addWidget(keyfile_browse_button, 0)
 
         form = QFormLayout()
         form.addRow(
@@ -115,7 +119,11 @@ class RecoveryPage(ResponsivePage):
         )
         form.addRow(
             form_label("Replacement USB"),
-            keyfile_row,
+            self.usb_volume_selector,
+        )
+        form.addRow(
+            form_label("Keyfile"),
+            self.new_keyfile_path_edit,
         )
         form.addRow(
             form_label("Password"),
@@ -157,7 +165,7 @@ class RecoveryPage(ResponsivePage):
 
         self.recover_button = QPushButton("Recover vault")
         self.recover_button.setObjectName("recoverVaultButton")
-        self.recover_button.setIcon(app_icon("shield", "#09201f"))
+        self.recover_button.setIcon(app_icon("shield", "#181818"))
         self.recover_button.setDefault(True)
         self.recover_button.clicked.connect(self._emit_recovery)
         self.confirmation_edit.returnPressed.connect(self._emit_recovery)
@@ -179,10 +187,10 @@ class RecoveryPage(ResponsivePage):
         surface_layout.addLayout(buttons)
 
         self.content_layout.setSpacing(SPACE_6)
-        self.content_layout.addStretch(1)
         self.content_layout.addWidget(header)
         self.content_layout.addWidget(surface)
         self.content_layout.addStretch(1)
+        self._update_keyfile_path()
 
     def show_error(
         self,
@@ -207,7 +215,9 @@ class RecoveryPage(ResponsivePage):
     def reset(self) -> None:
         """Reset the complete recovery form."""
         self.vault_path_edit.clear()
-        self.new_keyfile_path_edit.clear()
+        self.refresh_usb_volumes()
+        self.usb_volume_selector.clear_selection()
+        self._update_keyfile_path()
         self.clear_sensitive_fields()
         self.clear_error()
         self.replace_existing_keys_checkbox.setChecked(True)
@@ -225,7 +235,7 @@ class RecoveryPage(ResponsivePage):
             return
 
         if not new_keyfile_path:
-            self.show_error("Choose a path for the replacement USB keyfile.")
+            self.show_error("Select the replacement USB.")
             return
 
         if not password:
@@ -258,22 +268,19 @@ class RecoveryPage(ResponsivePage):
             self,
             "Select encrypted vault",
             "",
-            ("USB Vault files (*.vault);;All files (*)"),
+            ("Keyhold vaults (*.vault);;All files (*)"),
         )
 
         if selected_path:
             self.vault_path_edit.setText(selected_path)
 
-    def _browse_new_keyfile(self) -> None:
-        selected_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Create replacement USB keyfile",
-            "",
-            ("USB Vault keyfiles (*.authkey);;All files (*)"),
-        )
+    def refresh_usb_volumes(self) -> None:
+        """Reload mounted replacement USB devices."""
+        self.usb_volume_selector.refresh_volumes()
 
-        if selected_path:
-            self.new_keyfile_path_edit.setText(selected_path)
+    def _update_keyfile_path(self) -> None:
+        keyfile_path = self.usb_volume_selector.keyfile_path
+        self.new_keyfile_path_edit.setText(str(keyfile_path) if keyfile_path is not None else "")
 
     def _set_passwords_visible(
         self,

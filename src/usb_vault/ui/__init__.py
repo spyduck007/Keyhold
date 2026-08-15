@@ -1,1 +1,1 @@
-"""Desktop user interface for USB Vault."""
+"""Desktop user interface for Keyhold."""

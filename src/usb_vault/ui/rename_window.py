@@ -100,6 +100,7 @@ class RenameMainWindow(FullyAsyncSecurityMainWindow):
         entry_menu.addAction(self.rename_action)
 
         self.vault_page.table.itemSelectionChanged.connect(self._update_rename_action)
+        self.vault_page.rename_requested.connect(self._on_rename_requested)
         self.vault_page.move_requested.connect(self._on_move_requested)
         self.vault_page.move_folder_requested.connect(self._on_move_folder_requested)
 

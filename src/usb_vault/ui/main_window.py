@@ -14,6 +14,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFileDialog,
+    QHBoxLayout,
     QInputDialog,
     QMainWindow,
     QMessageBox,
@@ -33,7 +34,8 @@ from usb_vault.ui.backend import (
     UnlockedVault,
     VaultBackend,
 )
-from usb_vault.ui.components import FeedbackStatusBar
+from usb_vault.ui.branding import APP_NAME
+from usb_vault.ui.components import AppSidebar, FeedbackStatusBar
 from usb_vault.ui.drop_support import (
     local_regular_file_paths,
 )
@@ -78,10 +80,10 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setObjectName("mainWindow")
-        self.setWindowTitle("USB Vault")
-        self.setWindowIcon(app_icon("shield", "#61d7c5"))
-        self.resize(980, 680)
-        self.setMinimumSize(760, 520)
+        self.setWindowTitle(APP_NAME)
+        self.setWindowIcon(app_icon("shield", "#e6e6e6"))
+        self.resize(1_180, 760)
+        self.setMinimumSize(900, 600)
         self.setAcceptDrops(True)
         self.setStatusBar(FeedbackStatusBar(self))
 
@@ -103,9 +105,56 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self.unlock_page)
         self._pages.addWidget(self.setup_page)
         self._pages.addWidget(self.vault_page)
-        self.setCentralWidget(self._pages)
 
         self._create_actions()
+        self._page_navigation: dict[QWidget, str] = {}
+        self.sidebar = AppSidebar()
+        self.sidebar.set_brand_icon(app_icon("shield", "#f2f2f2"))
+        self.sidebar.add_item(
+            "vaults",
+            "Vaults",
+            app_icon("folder", "#c6c6c6"),
+            self._show_vaults_from_sidebar,
+            group="vaults",
+        )
+        self.sidebar.add_item(
+            "new",
+            "New vault",
+            app_icon("plus", "#c6c6c6"),
+            self.new_vault_action.trigger,
+            group="vaults",
+        )
+        self.sidebar.add_item(
+            "lock",
+            "Lock vault",
+            app_icon("lock", "#c6c6c6"),
+            self.lock_action.trigger,
+            group="session",
+            enabled=False,
+        )
+        self.sidebar.add_item(
+            "quit",
+            "Quit and eject",
+            app_icon("shield", "#c6c6c6"),
+            self.panic_close_action.trigger,
+            group="session",
+        )
+        self._bind_sidebar_action("new", self.new_vault_action)
+        self._bind_sidebar_action("lock", self.lock_action)
+        self._register_page_navigation(self.unlock_page, "vaults")
+        self._register_page_navigation(self.setup_page, "new")
+        self._register_page_navigation(self.vault_page, "vaults")
+
+        shell = QWidget()
+        shell.setObjectName("appShell")
+        shell_layout = QHBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
+        shell_layout.addWidget(self.sidebar)
+        shell_layout.addWidget(self._pages, 1)
+        self.setCentralWidget(shell)
+        self._pages.currentChanged.connect(self._sync_sidebar_page)
+
         self._create_menu()
 
         self.unlock_page.unlock_requested.connect(self._on_unlock_requested)
@@ -119,6 +168,26 @@ class MainWindow(QMainWindow):
         self.vault_page.lock_requested.connect(self.lock_vault)
 
         self._show_unlock_page()
+        self._sync_sidebar_page()
+
+    def _register_page_navigation(self, page: QWidget, key: str) -> None:
+        self._page_navigation[page] = key
+
+    def _show_vaults_from_sidebar(self) -> None:
+        if self.is_unlocked:
+            self._pages.setCurrentWidget(self.vault_page)
+            return
+        self._show_unlock_page()
+
+    def _sync_sidebar_page(self, _index: int = -1) -> None:
+        self.sidebar.set_active(self._page_navigation.get(self._pages.currentWidget()))
+
+    def _bind_sidebar_action(self, key: str, action: QAction) -> None:
+        def sync() -> None:
+            self.sidebar.set_item_enabled(key, action.isEnabled())
+
+        action.changed.connect(sync)
+        sync()
 
     @property
     def is_unlocked(self) -> bool:
@@ -359,6 +428,7 @@ class MainWindow(QMainWindow):
         self.vault_page.clear_entries()
         self.unlock_page.reset_after_lock()
         self.lock_action.setEnabled(False)
+        self.sidebar.set_session("No vault open", "Locked")
         self._show_unlock_page()
 
         self.statusBar().showMessage(
@@ -559,6 +629,7 @@ class MainWindow(QMainWindow):
         self.vault_page.set_vault_path(str(vault.vault_path))
         self.vault_page.set_entries(entries)
         self.lock_action.setEnabled(True)
+        self.sidebar.set_session(vault.vault_path.stem or "Vault", "Unlocked")
         self._pages.setCurrentWidget(self.vault_page)
 
     def _on_add_requested(self) -> None:

@@ -1,4 +1,4 @@
-"""Command-line entry point for the USB Vault prototype."""
+"""Command-line entry point for Keyhold."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ from usb_vault.core.errors import (
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(
-        prog="usb-vault",
+        prog="keyhold",
         description=("Create and manage a password-plus-USB encrypted vault."),
     )
 

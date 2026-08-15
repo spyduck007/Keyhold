@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from usb_vault.platform.macos.usb_volumes import UsbVolumeLocator
 from usb_vault.ui.components import (
     AUTH_PANEL_MAX_WIDTH,
     SPACE_2,
@@ -28,6 +29,7 @@ from usb_vault.ui.components import (
 )
 from usb_vault.ui.icons import app_icon
 from usb_vault.ui.usb_key_animation import UsbKeyAnimation
+from usb_vault.ui.usb_volume_selector import UsbVolumeSelector
 
 
 class UnlockPage(ResponsivePage):
@@ -36,11 +38,15 @@ class UnlockPage(ResponsivePage):
     unlock_requested = Signal(str, str, str)
     cancel_requested = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        usb_volume_locator: UsbVolumeLocator | None = None,
+    ) -> None:
         super().__init__(
             "unlockPage",
             max_width=AUTH_PANEL_MAX_WIDTH,
-            center_vertically=True,
             parent=parent,
         )
 
@@ -75,12 +81,22 @@ class UnlockPage(ResponsivePage):
         self.vault_path_edit = QLineEdit()
         self.vault_path_edit.setObjectName("vaultPathEdit")
         self.vault_path_edit.setPlaceholderText("Select a .vault file")
-        self.keyfile_path_edit = QLineEdit()
+        self.keyfile_path_edit = QLineEdit(self)
         self.keyfile_path_edit.setObjectName("keyfilePathEdit")
-        self.keyfile_path_edit.setPlaceholderText("Optional manual USB key path")
+        self.keyfile_path_edit.setReadOnly(True)
+        self.keyfile_path_edit.hide()
+        self.keyfile_path_edit.setPlaceholderText("Optional mounted USB key")
         self.keyfile_path_edit.setToolTip(
             "Leave blank to wait automatically for a registered mounted USB key."
         )
+        self.usb_volume_selector = UsbVolumeSelector(
+            usb_volume_locator=usb_volume_locator,
+            placeholder="Automatic detection, or select a USB",
+        )
+        self.usb_volume_combo = self.usb_volume_selector.combo
+        self.usb_volume_combo.setObjectName("unlockUsbVolumeComboBox")
+        self.usb_volume_selector.refresh_button.setObjectName("refreshUnlockUsbVolumesButton")
+        self.usb_volume_selector.keyfile_path_changed.connect(self.keyfile_path_edit.setText)
         self.password_edit = QLineEdit()
         self.password_edit.setObjectName("passwordEdit")
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -94,20 +110,16 @@ class UnlockPage(ResponsivePage):
         self.vault_browse_button.setObjectName("browseVaultButton")
         self.vault_browse_button.setIcon(app_icon("folder"))
         self.vault_browse_button.clicked.connect(self._browse_vault)
-        self.keyfile_browse_button = QPushButton("Browse manually…")
-        self.keyfile_browse_button.setObjectName("browseKeyfileButton")
-        self.keyfile_browse_button.setIcon(app_icon("key"))
-        self.keyfile_browse_button.clicked.connect(self._browse_keyfile)
+        self.keyfile_browse_button = self.usb_volume_selector.refresh_button
 
         self.vault_selection_row = self._field_with_button(
             "Vault file",
             self.vault_path_edit,
             self.vault_browse_button,
         )
-        self.manual_keyfile_row = self._field_with_button(
-            "USB key (optional manual selection)",
-            self.keyfile_path_edit,
-            self.keyfile_browse_button,
+        self.manual_keyfile_row = self._labeled_widget(
+            "USB key (optional)",
+            self.usb_volume_selector,
         )
 
         password_label = QLabel("Vault password")
@@ -124,7 +136,7 @@ class UnlockPage(ResponsivePage):
         self.cancel_button.clicked.connect(self.cancel_requested.emit)
         self.unlock_button = QPushButton("Continue")
         self.unlock_button.setObjectName("unlockButton")
-        self.unlock_button.setIcon(app_icon("arrow_right", "#09201f"))
+        self.unlock_button.setIcon(app_icon("arrow_right", "#181818"))
         self.unlock_button.setIconSize(QSize(18, 18))
         self.unlock_button.setDefault(True)
         self.unlock_button.clicked.connect(self._emit_unlock)
@@ -202,9 +214,9 @@ class UnlockPage(ResponsivePage):
         panel_layout.addWidget(self.form_surface)
         panel_layout.addWidget(self.wait_surface)
 
-        self.content_layout.addStretch(1)
         self.content_layout.addWidget(self.auth_panel)
         self.content_layout.addStretch(1)
+        self._update_keyfile_path()
 
     @property
     def is_waiting_for_usb(self) -> bool:
@@ -347,6 +359,17 @@ class UnlockPage(ResponsivePage):
         layout.addLayout(row)
         return container
 
+    def _labeled_widget(self, label_text: str, widget: QWidget) -> QWidget:
+        container = QWidget()
+        label = QLabel(label_text)
+        label.setObjectName("formLabel")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACE_2)
+        layout.addWidget(label)
+        layout.addWidget(widget)
+        return container
+
     def _emit_unlock(self) -> None:
         if self._waiting_for_usb or self._unlocking:
             return
@@ -364,17 +387,18 @@ class UnlockPage(ResponsivePage):
 
     def _browse_vault(self) -> None:
         selected_path, _ = QFileDialog.getOpenFileName(
-            self, "Open encrypted vault", "", "USB Vault files (*.vault);;All files (*)"
+            self, "Open encrypted vault", "", "Keyhold vaults (*.vault);;All files (*)"
         )
         if selected_path:
             self.vault_path_edit.setText(selected_path)
 
-    def _browse_keyfile(self) -> None:
-        selected_path, _ = QFileDialog.getOpenFileName(
-            self, "Select USB key", "", "USB Vault keys (*.authkey);;All files (*)"
-        )
-        if selected_path:
-            self.keyfile_path_edit.setText(selected_path)
+    def refresh_usb_volumes(self) -> None:
+        """Reload mounted USB devices available for manual selection."""
+        self.usb_volume_selector.refresh_volumes()
+
+    def _update_keyfile_path(self) -> None:
+        keyfile_path = self.usb_volume_selector.keyfile_path
+        self.keyfile_path_edit.setText(str(keyfile_path) if keyfile_path is not None else "")
 
     def _set_password_visible(self, visible: bool) -> None:
         self.password_edit.setEchoMode(
@@ -385,10 +409,10 @@ class UnlockPage(ResponsivePage):
         for widget in (
             self.vault_path_edit,
             self.keyfile_path_edit,
+            self.usb_volume_selector,
             self.password_edit,
             self.show_password_checkbox,
             self.vault_browse_button,
-            self.keyfile_browse_button,
         ):
             widget.setEnabled(enabled)
 

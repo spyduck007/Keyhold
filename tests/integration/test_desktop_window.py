@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication,
+    QLabel,
     QWidget,
 )
 from pytestqt.qtbot import QtBot
@@ -284,6 +285,52 @@ def test_successful_unlock_opens_vault_browser(
     assert window.current_page_name == "vault"
     assert window.vault_page.table.rowCount() == 1
     assert window.unlock_page.password_edit.text() == ""
+
+
+def test_sidebar_exposes_primary_navigation(
+    qtbot: QtBot,
+) -> None:
+    window = MainWindow(backend=FakeBackend())
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    new_vault_button = window.sidebar.item_button("new")
+    vaults_button = window.sidebar.item_button("vaults")
+    lock_button = window.sidebar.item_button("lock")
+
+    assert new_vault_button is not None
+    assert vaults_button is not None
+    assert lock_button is not None
+    assert not lock_button.isEnabled()
+
+    QTest.mouseClick(new_vault_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert window.current_page_name == "setup"
+
+    QTest.mouseClick(vaults_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert window.current_page_name == "unlock"
+
+    _fill_unlock_page(window)
+    _click_unlock(window)
+    assert lock_button.isEnabled()
+
+    QTest.mouseClick(lock_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert window.current_page_name == "unlock"
+    assert not window.is_unlocked
+
+
+def test_window_uses_keyhold_product_name(
+    qtbot: QtBot,
+) -> None:
+    window = MainWindow(backend=FakeBackend())
+    qtbot.addWidget(window)
+
+    assert window.windowTitle() == "Keyhold"
+    brand_label = window.sidebar.findChild(QLabel, "sidebarBrandName")
+    assert brand_label is not None
+    assert brand_label.text() == "Keyhold"
 
 
 def test_failed_unlock_remains_locked(

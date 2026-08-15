@@ -67,6 +67,16 @@ class RecoveryMainWindow(MonitoredMainWindow):
         self.recover_access_action.setIcon(app_icon("shield"))
         self.recover_access_action.triggered.connect(self.show_recovery_page)
 
+        self.sidebar.add_item(
+            "recovery",
+            "Recovery",
+            app_icon("shield", "#c6c6c6"),
+            self.recover_access_action.trigger,
+            group="access",
+        )
+        self._bind_sidebar_action("recovery", self.recover_access_action)
+        self._register_page_navigation(self.recovery_page, "recovery")
+
         recovery_menu = self.menuBar().addMenu("&Recovery")
         recovery_menu.addAction(self.recover_access_action)
 

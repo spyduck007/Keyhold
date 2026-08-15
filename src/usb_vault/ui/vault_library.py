@@ -459,7 +459,7 @@ class VaultLibraryStore:
 
 
 def default_vault_library_path() -> Path:
-    """Return the default per-user macOS registry path."""
+    """Return the Keyhold registry path, retaining existing legacy libraries."""
     override = os.environ.get(LIBRARY_PATH_ENVIRONMENT_VARIABLE)
 
     if override is not None:
@@ -468,9 +468,14 @@ def default_vault_library_path() -> Path:
 
         return _normalize_path(Path(override))
 
-    return _normalize_path(
-        Path.home() / "Library" / "Application Support" / "USB Vault" / "vault-library.json"
-    )
+    application_support = Path.home() / "Library" / "Application Support"
+    keyhold_path = _normalize_path(application_support / "Keyhold" / "vault-library.json")
+    legacy_path = _normalize_path(application_support / "USB Vault" / "vault-library.json")
+
+    if not keyhold_path.exists() and legacy_path.is_file():
+        return legacy_path
+
+    return keyhold_path
 
 
 def _default_display_name(

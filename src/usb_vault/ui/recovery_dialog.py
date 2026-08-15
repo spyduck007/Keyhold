@@ -81,7 +81,7 @@ class RecoveryCodeDialog(QDialog):
 
         self.done_button = QPushButton("Continue")
         self.done_button.setObjectName("finishRecoveryCodeButton")
-        self.done_button.setIcon(app_icon("arrow_right", "#09201f"))
+        self.done_button.setIcon(app_icon("arrow_right", "#181818"))
         self.done_button.setEnabled(False)
         self.done_button.clicked.connect(self.accept)
 

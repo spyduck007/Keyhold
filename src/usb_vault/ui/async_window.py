@@ -565,6 +565,7 @@ class AsyncSecurityMainWindow(SecurityMainWindow):
         busy: bool,
     ) -> None:
         self._pages.setEnabled(not busy)
+        self.sidebar.set_busy(busy)
         self._activity_indicator.setVisible(busy)
         status_bar = self.statusBar()
         if isinstance(status_bar, FeedbackStatusBar):

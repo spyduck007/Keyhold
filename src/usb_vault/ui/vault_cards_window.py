@@ -20,6 +20,7 @@ from usb_vault.ui.backend import (
 from usb_vault.ui.background_backend import (
     BackgroundVaultBackend,
 )
+from usb_vault.ui.icons import app_icon
 from usb_vault.ui.main_window import (
     RecoveryPresenter,
 )
@@ -99,6 +100,15 @@ class VaultCardsMainWindow(VaultLibraryMainWindow):
         self.library_page.rename_requested.connect(self._on_library_rename_requested)
         self.library_page.remove_requested.connect(self._on_library_remove_requested)
 
+        self.sidebar.add_item(
+            "existing",
+            "Add existing",
+            app_icon("folder", "#c6c6c6"),
+            self._on_add_existing_requested,
+            group="vaults",
+        )
+        self._register_page_navigation(self.library_page, "vaults")
+
         self.show_library_page()
 
     @property
@@ -171,7 +181,7 @@ class VaultCardsMainWindow(VaultLibraryMainWindow):
             self,
             "Add existing encrypted vault",
             "",
-            ("USB Vault files (*.vault);;All files (*)"),
+            ("Keyhold vaults (*.vault);;All files (*)"),
         )
 
         if not selected_path:

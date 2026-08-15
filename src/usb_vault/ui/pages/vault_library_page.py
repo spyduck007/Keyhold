@@ -60,7 +60,7 @@ class VaultCard(QFrame):
         )
 
         icon_label = QLabel()
-        icon_label.setPixmap(app_icon("lock", "#63d7c5").pixmap(22, 22))
+        icon_label.setPixmap(app_icon("lock", "#d2d2d2").pixmap(22, 22))
 
         title = QLabel(entry.display_name)
         title.setObjectName("vaultCardTitle")
@@ -173,14 +173,14 @@ class VaultLibraryPage(ResponsivePage):
         self._cards: dict[bytes, VaultCard] = {}
 
         header = PageHeader(
-            "USB VAULT",
+            "KEYHOLD",
             "Your vaults",
             "Choose a vault, enter its password, then authenticate with a registered USB key.",
         )
 
         self.create_button = QPushButton("Create vault")
         self.create_button.setObjectName("createVaultFromLibraryButton")
-        self.create_button.setIcon(app_icon("plus", "#09201f"))
+        self.create_button.setIcon(app_icon("plus", "#181818"))
         self.create_button.clicked.connect(self.create_requested.emit)
 
         self.add_existing_button = QPushButton("Add existing vault")
@@ -252,7 +252,7 @@ class VaultLibraryPage(ResponsivePage):
             empty_state.setMaximumWidth(620)
 
             empty_icon = QLabel()
-            empty_icon.setPixmap(app_icon("folder", "#61d7c5").pixmap(44, 44))
+            empty_icon.setPixmap(app_icon("folder", "#bdbdbd").pixmap(40, 40))
             empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_title = QLabel("Your encrypted space starts here")
             empty_title.setObjectName("emptyStateTitle")
@@ -266,7 +266,7 @@ class VaultLibraryPage(ResponsivePage):
 
             empty_create = QPushButton("Create vault")
             empty_create.setObjectName("primaryButton")
-            empty_create.setIcon(app_icon("plus", "#09201f"))
+            empty_create.setIcon(app_icon("plus", "#181818"))
             empty_create.clicked.connect(self.create_requested.emit)
             empty_add = QPushButton("Add existing vault")
             empty_add.setIcon(app_icon("folder"))
@@ -295,9 +295,7 @@ class VaultLibraryPage(ResponsivePage):
             self._cards_layout.addWidget(empty_state, 0, 0, 1, 3)
             return
 
-        self._cards_layout.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
+        self._cards_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         for index, entry in enumerate(normalized_entries):
             card = VaultCard(entry)
             card.open_requested.connect(self._forward_open)

@@ -279,3 +279,28 @@ def test_default_path_can_be_overridden(
     )
 
     assert default_vault_library_path() == custom_path
+
+
+def test_default_path_uses_keyhold_application_support(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(LIBRARY_PATH_ENVIRONMENT_VARIABLE, raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    assert default_vault_library_path() == (
+        tmp_path / "Library" / "Application Support" / "Keyhold" / "vault-library.json"
+    )
+
+
+def test_default_path_retains_an_existing_legacy_library(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(LIBRARY_PATH_ENVIRONMENT_VARIABLE, raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    legacy_path = tmp_path / "Library" / "Application Support" / "USB Vault" / "vault-library.json"
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.write_text("legacy", encoding="utf-8")
+
+    assert default_vault_library_path() == legacy_path

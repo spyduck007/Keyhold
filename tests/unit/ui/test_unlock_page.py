@@ -1,5 +1,7 @@
 """Tests for the desktop unlock page."""
 
+from pathlib import Path
+
 from PySide6.QtCore import (
     Qt,
 )
@@ -17,6 +19,13 @@ from pytestqt.qtbot import (
 from usb_vault.ui.pages.unlock_page import (
     UnlockPage,
 )
+
+
+class FakeUsbVolumeLocator:
+    """Return deterministic mounted USB roots."""
+
+    def external_usb_volumes(self) -> tuple[Path, ...]:
+        return (Path("/Volumes/Primary Key"),)
 
 
 def _show_page(
@@ -77,6 +86,19 @@ def test_unlock_page_allows_automatic_key_detection(
         "",
         "test password",
     ]
+
+
+def test_unlock_manual_fallback_selects_usb_root(
+    qtbot: QtBot,
+) -> None:
+    page = UnlockPage(usb_volume_locator=FakeUsbVolumeLocator())
+    qtbot.addWidget(page)
+    _show_page(page)
+
+    page.usb_volume_combo.setCurrentIndex(1)
+
+    assert page.keyfile_path_edit.isReadOnly()
+    assert page.keyfile_path_edit.text() == "/Volumes/Primary Key/.authkey"
 
 
 def test_unlock_page_requires_vault_path(
