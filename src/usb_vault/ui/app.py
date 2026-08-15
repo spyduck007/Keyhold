@@ -8,6 +8,13 @@ from collections.abc import (
     Sequence,
 )
 
+from PySide6.QtCore import (
+    QEvent,
+    Signal,
+)
+from PySide6.QtGui import (
+    QFileOpenEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
 )
@@ -33,6 +40,26 @@ IDLE_TIMEOUT_ENVIRONMENT_VARIABLE = "USB_VAULT_IDLE_TIMEOUT_SECONDS"
 USB_GRACE_ENVIRONMENT_VARIABLE = "USB_VAULT_USB_GRACE_SECONDS"
 
 
+class KeyholdApplication(QApplication):
+    """QApplication that also reports macOS "Open With" file events."""
+
+    file_open_requested = Signal(str)
+
+    def event(
+        self,
+        event: QEvent,
+    ) -> bool:
+        if isinstance(event, QFileOpenEvent):
+            path = event.file()
+
+            if path:
+                self.file_open_requested.emit(path)
+
+            return True
+
+        return super().event(event)
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -42,10 +69,15 @@ def main(
 
     arguments = list(argv) if argv is not None else sys.argv
 
-    application = QApplication(arguments)
+    application = KeyholdApplication(arguments)
     application.setApplicationName(APP_NAME)
     application.setOrganizationName(APP_NAME)
     apply_application_theme(application)
+
+    # macOS can deliver "Open With" file events (from a Finder double-click)
+    # before the main window exists, so buffer them until it's ready.
+    pending_open_paths: list[str] = []
+    application.file_open_requested.connect(pending_open_paths.append)
 
     session_guard = UsbGraceSessionGuard(
         usb_poll_interval_ms=(
@@ -71,7 +103,20 @@ def main(
     window = AutomaticUnlockMainWindow(session_guard=session_guard)
     window.show()
 
+    application.file_open_requested.disconnect(pending_open_paths.append)
+    application.file_open_requested.connect(window.open_vault_path)
+
+    for vault_path in (*pending_open_paths, *_vault_paths_from_arguments(arguments[1:])):
+        window.open_vault_path(vault_path)
+
     return application.exec()
+
+
+def _vault_paths_from_arguments(
+    arguments: Sequence[str],
+) -> list[str]:
+    """Support ``keyhold-gui some.vault`` in addition to Finder's Open With."""
+    return [argument for argument in arguments if argument.endswith(".vault")]
 
 
 def _environment_duration_ms(

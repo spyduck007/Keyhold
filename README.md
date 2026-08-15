@@ -19,3 +19,13 @@ run `packaging/icon/build_icns.sh` to rebuild the `.icns` before rebuilding
 the app.
 
 `dist/` and `build/` are build output and are not committed.
+
+### Opening a `.vault` file from Finder
+
+The bundle declares `.vault` as its own document type
+(`packaging/Keyhold.spec`), so once `Keyhold.app` is in `/Applications`,
+double-clicking any `.vault` file launches (or focuses) Keyhold with that
+vault's path already filled in — just enter the password and connect the
+USB key. The build script also registers the freshly built bundle with
+Launch Services, so this works immediately after a build, before macOS
+would otherwise notice the new app.

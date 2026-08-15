@@ -466,3 +466,96 @@ def test_manual_keyfile_bypasses_waiter(
     assert locator.calls == 0
     assert backend.unlock_calls == 1
     assert window._require_vault().keyfile_path == keyfile_path
+
+
+def test_open_vault_path_shows_the_unlock_form(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    vault_path = tmp_path / "Private.vault"
+    vault_path.write_bytes(b"encrypted vault")
+
+    window = AutomaticUnlockMainWindow(
+        backend=FakeVaultBackend(),
+        session_guard=_session_guard(),
+        key_locator=FakeKeyLocator(),
+        vault_library=_library_store(
+            tmp_path=tmp_path,
+            vault_path=vault_path,
+        ),
+        unlock_poll_interval_ms=20,
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    other_vault_path = tmp_path / "Other.vault"
+    other_vault_path.write_bytes(b"another vault")
+
+    window.open_vault_path(str(other_vault_path))
+
+    assert window.current_page_name == "unlock"
+    assert window.unlock_page.vault_path_edit.text() == str(other_vault_path)
+
+
+def test_open_vault_path_ignores_blank_input(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    vault_path = tmp_path / "Private.vault"
+    vault_path.write_bytes(b"encrypted vault")
+
+    window = AutomaticUnlockMainWindow(
+        backend=FakeVaultBackend(),
+        session_guard=_session_guard(),
+        key_locator=FakeKeyLocator(),
+        vault_library=_library_store(
+            tmp_path=tmp_path,
+            vault_path=vault_path,
+        ),
+        unlock_poll_interval_ms=20,
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    window.open_vault_path("   ")
+
+    assert window.current_page_name == "library"
+
+
+def test_open_vault_path_locks_an_already_unlocked_vault_first(
+    qtbot: QtBot,
+    tmp_path: Path,
+) -> None:
+    vault_path = tmp_path / "Private.vault"
+    vault_path.write_bytes(b"encrypted vault")
+
+    window = AutomaticUnlockMainWindow(
+        backend=FakeVaultBackend(),
+        session_guard=_session_guard(),
+        key_locator=FakeKeyLocator(result=Path("/Volumes/USB/.authkey")),
+        vault_library=_library_store(
+            tmp_path=tmp_path,
+            vault_path=vault_path,
+        ),
+        unlock_poll_interval_ms=20,
+    )
+    qtbot.addWidget(window)
+    _show_window(window)
+
+    _open_card_and_submit_password(
+        window,
+        PASSWORD,
+    )
+    qtbot.waitUntil(
+        lambda: window.is_unlocked,
+        timeout=3_000,
+    )
+
+    other_vault_path = tmp_path / "Other.vault"
+    other_vault_path.write_bytes(b"another vault")
+
+    window.open_vault_path(str(other_vault_path))
+
+    assert not window.is_unlocked
+    assert window.current_page_name == "unlock"
+    assert window.unlock_page.vault_path_edit.text() == str(other_vault_path)

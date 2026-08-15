@@ -4,6 +4,7 @@ import pytest
 
 from usb_vault.ui.app import (
     _environment_duration_ms,
+    _vault_paths_from_arguments,
 )
 
 
@@ -71,3 +72,21 @@ def test_invalid_environment_duration_is_rejected(
             variable_name,
             5_000,
         )
+
+
+def test_vault_paths_from_arguments_keeps_only_vault_files() -> None:
+    assert _vault_paths_from_arguments(
+        [
+            "/Users/ansh/Downloads/Private.vault",
+            "--flag",
+            "/Users/ansh/notes.txt",
+            "/Volumes/USB/Backup.vault",
+        ]
+    ) == [
+        "/Users/ansh/Downloads/Private.vault",
+        "/Volumes/USB/Backup.vault",
+    ]
+
+
+def test_vault_paths_from_arguments_returns_empty_for_no_matches() -> None:
+    assert _vault_paths_from_arguments(["--flag", "value"]) == []

@@ -164,6 +164,32 @@ class AutomaticUnlockMainWindow(VaultCardsMainWindow):
             display_name=display_name,
         )
 
+    def open_vault_path(
+        self,
+        vault_path: str,
+    ) -> None:
+        """Open a vault file handed to the app by the OS or the command line."""
+        normalized_path = vault_path.strip()
+
+        if not normalized_path:
+            return
+
+        if self.is_busy:
+            self._show_busy_message()
+            return
+
+        if self.is_unlocked:
+            self.lock_vault()
+
+        path = Path(normalized_path)
+        self._show_unlock_form(
+            path,
+            display_name=(path.stem or "Vault"),
+        )
+
+        self.raise_()
+        self.activateWindow()
+
     def _on_unlock_requested(
         self,
         vault_path: str,
